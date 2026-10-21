@@ -1,0 +1,16 @@
+{
+  "name": "eakot-mp",
+  "owner": {
+    "name": "eakot"
+  },
+  "metadata": {
+    "description": "Claude Code plugins shared from eakot's homelab: skills, agents and commands that work in any repository."
+  },
+  "plugins": [
+    {
+      "name": "grafana-sitrep",
+      "source": "./plugins/grafana-sitrep",
+      "description": "Refactor a Grafana dashboard into dense sitrep status sheets: a one-line verdict, every number with an OK/WARN/ACT tag, every git entity a link."
+    }
+  ]
+}
