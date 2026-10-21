@@ -153,9 +153,10 @@ invisible here"). An unnamed gap reads as green.
 5. **Generate, don't hand-edit.** Write a generator that reads the *original* JSON and writes the new
    one, using `scripts/sitrep.py` (`sheet`, `history`, `today`, `opened_closed`, `registry`, `finish`).
    Start from `examples/refactor_example.py`. Keep the generator, the original and the assets together,
-   so the next change is a rerun. `finish()` refuses overlapping or over-wide panels.
+   so the next change is a rerun. Write the JSON in the file's own format (indent, `ensure_ascii`): the diff then
+   shows the change, not a reformat. `finish()` refuses overlapping or over-wide panels.
 6. **Render and check.** Run `scripts/render_check.py <url> shot.png` (it reads the token from
-   `GRAFANA_TOKEN`). It checks for:
+   `GRAFANA_TOKEN`; it scrolls the page, because Grafana renders a panel only once it is in view). It checks for:
    - zero sheets;
    - same-tab links;
    - `undefined` or `NaN` text;

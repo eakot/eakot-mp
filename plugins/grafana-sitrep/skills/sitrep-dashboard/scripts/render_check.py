@@ -39,7 +39,14 @@ async def main(url, shot):
         errors = []
         pg.on("pageerror", lambda e: errors.append(str(e)[:300]))
         await pg.goto(url, wait_until="load", timeout=90000)
-        await pg.wait_for_timeout(15000)  # queries and the panel helpers run after load
+        await pg.wait_for_timeout(8000)
+        # Grafana renders a panel only once it scrolls into view: wheel through the page, or every panel below the
+        # fold is missing from the checks (and blank in the screenshot)
+        await pg.mouse.move(900, 600)
+        for _ in range(60):
+            await pg.mouse.wheel(0, 1200)
+            await pg.wait_for_timeout(700)
+        await pg.wait_for_timeout(8000)  # queries and the panel helpers run after a panel mounts
         await pg.screenshot(path=shot, full_page=True)
         r = await pg.evaluate(CHECKS)
         await b.close()
