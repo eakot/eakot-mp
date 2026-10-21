@@ -19,6 +19,7 @@ there, so nobody "simplifies" one away.
 | 11 | Times in UTC on one panel and local time on the next | The default timezone was set per dashboard, and inconsistently. | Set `timezone: browser` on every dashboard, and `GF_DATE_FORMATS_DEFAULT_TIMEZONE=browser`. "Today" is the UTC day, and the description says so. |
 | 12 | A day-one chart with one category stuck at 0, although the operator could see the waiting | The rule classified the wait the operator meant (local checks) as work. | Replay a day of real data through a new classifier before shipping it, and ask "would the operator recognise this split?" |
 | 13 | The "same" data meant different things on two sheets | Each sheet carried its own copy of the repo map and of the helpers. | Use one library, one registry and one generator. The page never carries hand-edited copies. |
+| 14 | A pack file shown as one run-on paragraph; then, with its newlines kept, as markdown headings with `&#39;` printed literally | `page()` collapses newlines so the template literals stay compact. Kept newlines are worse: the panel's markdown pass ends the HTML block at the file's first blank line and renders the rest as markdown. | Show a file with `raw(text)`: it escapes the text and writes each newline as `&#10;`, which survives both. |
 
 ## Not traps, but rulings
 

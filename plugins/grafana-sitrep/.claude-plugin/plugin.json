@@ -2,6 +2,6 @@
   "name": "grafana-sitrep",
   "description": "Refactor Grafana dashboards into dense sitrep status sheets: a one-line verdict, a table of contents of every number with OK/WARN/ACT tags, every git entity a link, beside history charts that cannot lie.",
   "author": { "name": "eakot" },
-  "version": "1.0.1",
+  "version": "1.0.2",
   "license": "MIT"
 }

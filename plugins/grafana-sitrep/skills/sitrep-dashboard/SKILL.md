@@ -181,7 +181,7 @@ invisible here"). An unnamed gap reads as green.
 | Data | `rows(ref)` → `[{labels, value}]`; `one(ref)`; `table(ref)` for Infinity or SQL frames |
 | Links | `repoA`, `prA`, `commitA`, `fileA`, `wfA`, `refA`, `linkify(text, repo)` |
 | Values | `dur`, `pct`, `num`, `usd`; `lvl(x, [[0,'ok'],[2,'warn'],[6,'bad']])`; `worst(states)` |
-| Layout | `page(no, title, body)`, `brief`, `sub`, `ln(label, value, state, note)`, `item(text, state, wrap)`, `foot` |
+| Layout | `page(no, title, body)`, `brief`, `sub`, `ln(label, value, state, note)`, `item(text, state, wrap)`, `foot`, `raw(text)` for a file shown as written |
 | Columns | `<div class="cols">…</div>` |
 
 Rules:

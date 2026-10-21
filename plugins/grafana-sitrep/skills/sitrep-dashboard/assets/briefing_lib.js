@@ -74,5 +74,8 @@ const sub = (text) => `<div class="sh">▸ ${text}</div>`;
 const item = (text, state, wrap) => `<div class="it s-${state || 'idle'}${wrap ? ' wrap' : ''}">${text}</div>`;
 const brief = (text) => `<div class="br"><span class="bl">SITREP</span> ${text}</div>`;
 const foot = (text) => `<div class="ft">${text}</div>`;
+// A file shown as written. Its newlines go in as &#10;: a literal one would be stripped by page(), and a blank line
+// would end the panel's HTML block, so the markdown pass would turn the rest of the file into headings and lists.
+const raw = (text) => `<pre class="raw">${esc(text).replace(/\n/g, '&#10;')}</pre>`;
 const page = (no, title, body) => `<div class="bp"><div class="hd"><span class="no">${no}</span><span class="ti">${title}</span></div>${body}</div>`.replace(/\n\s*/g, '');
 const worst = (states) => ['bad', 'warn', 'nd', 'ok', 'info', 'idle'].find((s) => states.includes(s)) || 'idle';

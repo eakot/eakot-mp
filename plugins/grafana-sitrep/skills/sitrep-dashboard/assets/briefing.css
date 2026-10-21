@@ -35,4 +35,5 @@ a:hover { color: #7fdbff; border-bottom-color: #7fdbff; }
 .cols { columns: 2 300px; column-gap: 28px; }
 .cols > * { break-inside: avoid; }
 .ft { color: #6e7681; font-size: 11px; border-top: 1px dashed rgba(110, 118, 129, 0.4); margin-top: 8px; padding-top: 3px; white-space: normal; }
+.raw { white-space: pre-wrap; word-break: break-word; margin: 6px 0 0; color: #e6edf3; font: inherit; }
 @keyframes bpblink { to { opacity: 0.55; } }
