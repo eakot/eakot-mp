@@ -25,10 +25,17 @@ there, so nobody "simplifies" one away.
 | 17 | A task text cut off mid-sentence by the ellipsis, with no way to read the rest | The line carried a 110-character clip of text that never fits. | The task leaves the line and shows whole on hover (`item(..., tip)`). |
 | 18 | Node names cut at half the line's width | The feed reused a title clipped to 48 characters to fit a Node Graph box. | The feed carries the full name beside the clipped one, and the sheet reads the full one. Never clip at the source for another view. |
 | 19 | `(**held**)` with its asterisks in every node name | Plan rows are markdown, and the name was passed through as written. | The feed strips `**…**` emphasis where it reads the name. A lone `*` stays. |
+| 20 | A traffic chart, "in above, out below", with no out side at all | `history()` floors every line chart at 0. That is right for a gauge, and it silently cuts away the negative half of a flow. `opened_closed()` drawn as lines had the same latent defect. | `history(..., signed=True)` drops the floor. Bars were never floored. |
+| 21 | "Failed IPMI units: 2 — ACT" on every host page | `openipmi`/`ipmievd` come from the VM template and fail on every host with no BMC. The sheet classified one host's units without looking at the fleet. | Query a failure fleet-wide before tagging it. A failure every host shares is INFO, with the note "fails on every host". |
+| 22 | "Collectors failing: pressure, conntrack — WARN, sheet lines are N/D" on a PVE node whose memory-stall line read fine | `node_scrape_collector_success == 0` means one file failed, not that the series are gone: the node lacks the irq-PSI and conntrack-stats files. | Map each producer to a series it must yield and test that series for presence. Failed with the series present = INFO "partial". Failed with the series gone = WARN. |
+| 23 | "Fills in ~4811d 14h at the 24-h trend" | A 24-hour `deriv` on a disk that does not move, divided into the free space. | Cap the forecast at 30 days for a 24-hour window. Further out reads "not filling within 30 d". |
+| 24 | (caught before shipping) A sheet keyed on `labels.__name__` from `count by (__name__)` | Whether a frame's labels carry `__name__` depends on the datasource and the query, so the key was never reliable. | `label_replace` the name into a plain label (`metric`). `sheet_harness.py` leaves `__name__` out, so a sheet that relies on it fails the dry run. |
 
 ## Not traps, but rulings
 
-These needed the operator, so ask them:
+These needed the operator, so ask them. On a page with no operator in the loop (a background job), set
+each one yourself, write it in the panel's (i) as "this page's ruling", and list every such ruling in the
+hand-over, so the operator can overturn it in one reply:
 
 - **What "today" means.** Here it is the UTC calendar day, whatever the display zone.
 - **Which idle is intended.** Here budget and end-of-day are INFO; everything else is ACT.

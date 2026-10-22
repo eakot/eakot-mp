@@ -129,6 +129,34 @@ chart its own range (`timeFrom: "14d"`), so a short page default does not cut it
   category rule and ask whether the operator would recognise the split. A bucket stuck at 0 on day
   one means the rule is wrong.
 
+**Q: "Which host is this about?"** (a templated page: one host, one repo, one service at a time)
+**A:** Keep the original's template variables, and filter every target by them. Each sheet names the
+entity it shows, from one identity query (`node_uname_info{instance="$node"}` → name, VM id, kernel),
+so a screenshot passed around still says whose numbers these are. An empty or unknown variable is a
+state too: every sheet then reads N/D, and the first SITREP says "no host picked", not "all clear". Dry-run
+each sheet on several entities before shipping (§3 step 5): a node, a VM, one without systemd, one that
+does not exist. A rule that holds on the host you built it on can misfire on its siblings.
+
+**Q: "Is it red on every host, or only here?"**
+**A:** Before a failure gets ACT, query it across the whole fleet. A failure that every host shares is
+the template, not this host: the IPMI units that fail on every VM with no BMC are INFO, and the note
+says "fails on every host". The same goes for a counter every guest shares (identical receive drops
+on every VM on one LAN): it is context, not loss. A per-entity page that shouts a fleet-wide constant
+teaches the reader to skip the ACT tag.
+
+**Q: "It says the collector failed. Is the sheet blank?"**
+**A:** A health flag is not the data. Check the series the sheet *reads*, not the producer's own
+verdict on itself. node-exporter reports `pressure` as failed on a kernel with no irq PSI file, while
+the memory, CPU and I/O series it reads are all there. So a failed producer whose series are present
+is INFO ("partial"), and only a failed producer whose series are gone is WARN. Map each producer to
+one series it must yield, and test that series for presence.
+
+**Q: "It fills in 4,811 days?"**
+**A:** A forecast is only as good as its window. A 24-hour `deriv` on a disk that does not move
+extrapolates noise into years. Cap the horizon at a few multiples of the window (30 days for a 24-hour
+fit), and show anything further out as "not filling within 30 d". A precise-looking number that nobody
+should act on is worse than none.
+
 **Q: "What time is that?"**
 **A:** Display in the reader's zone: `timezone: browser` on every dashboard, and the server default
 too. Compute "today" in the zone the operator ruled, and print it in the sub-head
@@ -136,7 +164,9 @@ too. Compute "today" in the zone the operator ruled, and print it in the sub-hea
 
 **Q: "Is the backlog collapsing?"**
 **A:** Show a flow as a pair. Inflow goes above zero and outflow below it, per entity, with a net
-line. A one-sided count (closed per day) cannot answer the question it was built for.
+line. A one-sided count (closed per day) cannot answer the question it was built for. A line chart is
+floored at 0, which cuts the whole outflow off: pass `history(..., signed=True)` to any chart with a
+side below zero (this includes traffic in and out).
 
 **Q: "I can't read it."**
 **A:** Use a monospace body, an uppercase display face for headers only, and a **flat monochrome
@@ -160,7 +190,10 @@ invisible here"). An unnamed gap reads as green.
 
 1. **Inventory.** Export the dashboard JSON. For every panel, write down the operator question it
    answers, its query, and what it shows *now*. A panel with no question goes to the bottom, collapsed,
-   or away.
+   or away. A large community dashboard (Node Exporter Full: 14 rows, ~120 panels) keeps its deep rows
+   as the drill-down: the sheets replace only its top rows of tiles and basic charts, and
+   `carry_rows(src["panels"], y, drop=..., prefix="Drill-down · ")` carries the rest below them,
+   collapsed. Keep the original's uid, so links to it still work.
 2. **Answer as the operator.** Query every series live. Mark each defect:
    - an impossible value;
    - "No data";
@@ -171,7 +204,9 @@ invisible here"). An unnamed gap reads as green.
 
    Find the cause of each one in the query, not the style. Most "ugly" panels are wrong panels.
 3. **Get the rulings.** Ask the human, in one message, only the rulings listed in §1 that the data and
-   history cannot settle.
+   history cannot settle. A threshold that an alert rule in the repo already pages on is not a ruling:
+   copy it, and name the rule in the (i). When no one is there to answer (a background run), set the
+   rest yourself, mark each one in the (i) as "this page's ruling", and list them all in the hand-over.
 4. **Group and rank.** Arrange one row per question, most expensive first. The sheet goes on the left
    (`w` 8–12), its history to the right, both the same height. Number the sheets `01`, `01·B`, `02`, and
    so on.
@@ -181,8 +216,18 @@ invisible here"). An unnamed gap reads as green.
    Start from `examples/refactor_example.py`. Keep the generator, the original and the assets together,
    so the next change is a rerun. Write the JSON in the file's own format (indent, `ensure_ascii`): the diff then
    shows the change, not a reformat. `finish()` refuses overlapping or over-wide panels.
-6. **Render and check.** Run `scripts/render_check.py <url> shot.png` (it reads the token from
-   `GRAFANA_TOKEN`; it scrolls the page, because Grafana renders a panel only once it is in view). It checks for:
+
+   **Then dry-run every sheet before you deploy:**
+   `scripts/sheet_harness.py out.json <prom-url> --var node=... --var job=...`. It runs each sheet's
+   queries against live data, runs the sheet's helper code in `node`, and prints the sheet as text,
+   SITREP line first. It fails on a helper that throws, on `undefined` or `NaN` text, and on a sheet
+   with no SITREP. Run it once per entity (step 2 of the "Which host?" answer) and once with a value
+   that matches nothing. A deploy-and-screenshot round trip takes minutes; this takes seconds, and it is
+   where most classification mistakes show up.
+6. **Render and check.** Run `scripts/render_check.py <url> shot.png`. It reads the token from
+   `GRAFANA_TOKEN`, or from the file `GRAFANA_TOKEN_FILE` names, such as the one mcp-grafana already
+   keeps, so the token never passes through argv. It scrolls the page, because Grafana renders a panel
+   only once it is in view. Put a templated page's variables in the URL (`&var-node=...`). It checks for:
    - zero sheets;
    - same-tab links;
    - `undefined` or `NaN` text;
@@ -221,6 +266,9 @@ Rules:
   (`item(..., true)`), or else goes whole into the line's hover `tip`. An ellipsis is only a fallback
   for a narrow panel, never the only way to read the text.
 - **Lead with the fixed fields.** `fx()` columns first, then the free text (see §2).
+- **Never read `__name__` from a label.** To key a sheet by metric name, copy the name into a plain
+  label in the query: `label_replace(..., "metric", "$1", "__name__", "(.*)")`, then read
+  `labels.metric`.
 
 ## 5. Files
 
@@ -228,8 +276,9 @@ Rules:
 |---|---|
 | `assets/briefing_lib.js` | The renderer, embedded into every sheet. Change it here, then regenerate. |
 | `assets/briefing.css` | The style: flat background, monospace, state colours. |
-| `scripts/sitrep.py` | Panel builders and the `today()` and layout checks. |
+| `scripts/sitrep.py` | Panel builders (`sheet`, `history`, `opened_closed`, `carry_rows`), plus `today()` and the layout checks. |
 | `scripts/render_check.py` | The headless render plus the checks from step 6. |
+| `scripts/sheet_harness.py` | Runs every sheet against live data in `node` and prints it as text, before deploying (step 5). |
 | `examples/refactor_example.py` | A deploy page refactored end to end. |
 | `reference/traps.md` | Every defect the first page shipped with, its cause, and the fix in these files. |
 
@@ -243,6 +292,7 @@ Rules:
 | [VictoriaMetrics](https://victoriametrics.com/) as the PromQL datasource | any current release | `sitrep.today()` puts a computed timestamp after `@` (`@ (time() - time() % 86400)`), which VictoriaMetrics accepts and Prometheus does not: Prometheus allows only a fixed timestamp, `start()` or `end()`. On Prometheus, rewrite `today()` before using it |
 | Python | 3, standard library only | `scripts/sitrep.py` and the generators |
 | [Playwright](https://playwright.dev/python/) with Chromium | any current release | only `scripts/render_check.py`: `pip install playwright && playwright install chromium` |
+| [Node.js](https://nodejs.org/) | any current release | only `scripts/sheet_harness.py`, which runs the sheets' helper code outside Grafana |
 
 Pin both Grafana plugins in the install, for example in Docker Compose:
 

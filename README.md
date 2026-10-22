@@ -22,6 +22,7 @@ worth sharing. Every plugin here works in any repository and names none.
 | [VictoriaMetrics](https://victoriametrics.com/) as the PromQL datasource | any current release | `sitrep.today()` puts a computed timestamp after `@` (`@ (time() - time() % 86400)`), which VictoriaMetrics accepts and Prometheus does not: Prometheus allows only a fixed timestamp, `start()` or `end()`. On Prometheus, rewrite `today()` before using it |
 | Python | 3, standard library only | `scripts/sitrep.py` and the generators |
 | [Playwright](https://playwright.dev/python/) with Chromium | any current release | only `scripts/render_check.py`: `pip install playwright && playwright install chromium` |
+| [Node.js](https://nodejs.org/) | any current release | only `scripts/sheet_harness.py`, which runs every sheet against live data before deploying |
 
 Pin both Grafana plugins in the install, for example in Docker Compose:
 

@@ -82,7 +82,7 @@ def sheet(pid, title, desc, grid, targets, body_js, *, ds, repos=None, forge="ht
 
 
 def history(pid, title, desc, grid, targets, *, interval, time_from=None, unit="short", stack=True, bars=False,
-            colors=None):
+            colors=None, signed=False):
     """A time series beside a sheet. Sample a GAUGE and average it per bucket (avg_over_time(g[$__interval])):
     a stack of slots can then never exceed the slot count. `increase()` of a total booked when work seals puts a
     3-hour job into one bucket and draws the peak nobody believes.
@@ -90,14 +90,18 @@ def history(pid, title, desc, grid, targets, *, interval, time_from=None, unit="
     `interval` is the bucket, and it has no default: set it to the source's write cadence (an exporter pass every
     5 min -> "5m"). Finer only repeats one sample; coarser hides what the data has. Name it in the title
     ("— 5-minute average"). `time_from` pins this chart's own range ("14d") for a per-day or weekly chart on a page
-    whose default range is set for the finest chart."""
+    whose default range is set for the finest chart.
+
+    `signed=True` drops the axis floor of 0 for a chart that goes below zero by design: the outflow side of
+    opened_closed(), or traffic in above / out below. A line chart is otherwise floored at 0 (no gauge here can
+    be negative), and the floor silently cuts the whole negative half away."""
     over = [{"matcher": {"id": "byRegexp", "options": rx},
              "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": c}}]} for rx, c in (colors or {}).items()]
     return {
         "id": pid, "type": "timeseries", "title": title, "description": desc, "gridPos": grid,
         "datasource": targets[0]["datasource"], "targets": targets, "interval": interval,
         "fieldConfig": {"defaults": {
-            "unit": unit, "min": None if bars else 0, "color": {"mode": "palette-classic"},
+            "unit": unit, "min": None if bars or signed else 0, "color": {"mode": "palette-classic"},
             "custom": {"drawStyle": "bars" if bars else "line", "fillOpacity": 80 if bars else 35, "lineWidth": 1,
                        "stacking": {"mode": "normal" if stack else "none", "group": "A"}, "showPoints": "never"},
         }, "overrides": over},
@@ -114,6 +118,28 @@ def opened_closed(opened, closed, by, ds, net=None):
     if net:
         t.append(q("C", net, ds, "net change", instant=False))
     return t
+
+
+def carry_rows(panels, y, *, drop=(), prefix=""):
+    """The original's COLLAPSED rows, re-anchored from `y` down, for a page that keeps its deep panels as a
+    drill-down below the sheets (a community dashboard: Node Exporter Full has 14 such rows and ~120 panels).
+    `drop` names rows the sheets replace. An expanded row is refused: its panels are top-level, finish() would
+    have to check them, and they would push the sheets off the first screen. Returns (rows, next_y)."""
+    out = []
+    for p in panels:
+        if p.get("type") != "row" or p.get("title") in drop:
+            continue
+        if not p.get("collapsed"):
+            raise SystemExit(f"row {p.get('title')!r} is expanded: collapse it in the original, or drop it")
+        r = json.loads(json.dumps(p))
+        base, r["gridPos"]["y"] = r["gridPos"]["y"], y
+        for c in r.get("panels", []):
+            c["gridPos"]["y"] = y + 1 + max(0, c["gridPos"]["y"] - base - 1)
+        if prefix:
+            r["title"] = f"{prefix}{p.get('title', '')}"
+        out.append(r)
+        y += 1
+    return out, y
 
 
 def row(pid, title, y):

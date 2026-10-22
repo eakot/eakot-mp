@@ -3,8 +3,12 @@
 `playwright install chromium`.
 
     GRAFANA_TOKEN=... python3 render_check.py 'https://grafana.example/d/uid/slug?kiosk' shot.png
+    GRAFANA_TOKEN_FILE=/path/to/token python3 render_check.py ...
 
-The token is read from the environment, never from argv (argv is visible to every user in `ps`). Exit 1 if any
+The token is read from the environment or from the file GRAFANA_TOKEN_FILE names, never from argv (argv is
+visible to every user in `ps`). The file form lets the check reuse the token an MCP server already keeps on
+disk (mcp-grafana's GRAFANA_SERVICE_ACCOUNT_TOKEN_FILE) without the token passing through a shell or a log.
+For a templated page, put the variables in the URL (`&var-node=...`); the page otherwise opens on its default. Exit 1 if any
 check fails; the screenshot is written either way, so read it with the operator's eyes after the numbers pass.
 """
 import asyncio
@@ -32,7 +36,11 @@ CHECKS = """() => {
 
 
 async def main(url, shot):
-    headers = {"Authorization": f"Bearer {os.environ['GRAFANA_TOKEN']}"} if os.environ.get("GRAFANA_TOKEN") else {}
+    token = os.environ.get("GRAFANA_TOKEN")
+    if not token and os.environ.get("GRAFANA_TOKEN_FILE"):
+        with open(os.environ["GRAFANA_TOKEN_FILE"]) as f:
+            token = f.read().strip()
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
     async with async_playwright() as p:
         b = await p.chromium.launch()
         pg = await b.new_page(viewport={"width": 1800, "height": 3400}, extra_http_headers=headers)
