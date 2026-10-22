@@ -71,7 +71,12 @@ const ln = (label, value, state, note) =>
   `<div class="ln s-${state || 'idle'}"><span class="lb">${label}</span><span class="dt"></span><span class="v">${value}</span><span class="tg">${TAG[state || 'idle']}</span></div>` +
   (note ? `<div class="nt">${note}</div>` : '');
 const sub = (text) => `<div class="sh">▸ ${text}</div>`;
-const item = (text, state, wrap) => `<div class="it s-${state || 'idle'}${wrap ? ' wrap' : ''}">${text}</div>`;
+// A list line. `tip` is text too long for the line: it shows whole on hover instead of being cut by the ellipsis.
+const item = (text, state, wrap, tip) =>
+  `<div class="it s-${state || 'idle'}${wrap ? ' wrap' : ''}"${tip ? ` title="${esc(tip)}"` : ''}>${text}</div>`;
+// A fixed-width column, `w` in ch. Fixed fields lead a line, so every line's free text starts at the same column.
+// min-width, not width: an unexpected long value pushes the line instead of being clipped.
+const fx = (w, html) => `<span class="fx dim" style="min-width:${w}ch">${html}</span>`;
 const brief = (text) => `<div class="br"><span class="bl">SITREP</span> ${text}</div>`;
 const foot = (text) => `<div class="ft">${text}</div>`;
 // A file shown as written. Its newlines go in as &#10;: a literal one would be stripped by page(), and a blank line

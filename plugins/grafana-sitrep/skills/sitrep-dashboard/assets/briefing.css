@@ -20,6 +20,7 @@ a:hover { color: #7fdbff; border-bottom-color: #7fdbff; }
 .nt { color: #6e7681; font-size: 11.5px; margin: -1px 0 2px 2ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .it { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 1ch; text-indent: -1ch; }
 .it.wrap { white-space: normal; }
+.fx { display: inline-block; text-indent: 0; }
 .it::before { content: '› '; color: #6e7681; }
 .id, .dim { color: #6e7681; font-size: 11.5px; }
 .rp { color: #d2a8ff; }

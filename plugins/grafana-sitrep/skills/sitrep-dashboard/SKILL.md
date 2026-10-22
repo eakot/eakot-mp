@@ -87,9 +87,31 @@ either a live table or the generator's map, never a per-sheet copy. An entity th
 stays **plain text**, because a guessed link 404s.
 
 **Q: "What is `node N39323102473`?"**
-**A:** A machine id is never the label. Lead with the meaning: the title or the task. Push the id to
-the end of the line, dimmed, and make it the link to its file or record. An id with no link and no
-meaning comes off the page.
+**A:** A machine id is never the label: the meaning (the title) is, and it links to the work. The id
+stays on the line dimmed, as the link to its file or record. An id with no link and no meaning comes
+off the page.
+
+**Q: "Why does every line start its text somewhere else?"**
+**A:** Fixed-length fields lead the line, each in its own fixed-width column (`fx(w, html)`): the id,
+lane, model, uptime, and any field drawn from a small known set (a topic: pad the column to the
+longest value). Free text, the title, a PR ref and so on, comes after them. Each line then reads
+like a table row, and the eye finds the title at the same column on every line. A short field
+placed after the title moves around and reads as noise.
+
+**Q: "The text is cut off. What does it say?"**
+**A:** Text too long for its line goes to a hover tooltip (`item(text, state, wrap, tip)`), not to
+an ellipsis that nobody can expand. Keep on the line only what fits, and move the long remainder
+(a task, a verdict) to the tooltip. A name is never shortened at the **source** to fit some other
+view: when a feed clips a field to fit a graph box, add a full-length field beside it for the sheet.
+Shorten at render time only, and keep the clipped copy only where the narrow view needs it.
+
+**Q: "What happened in the last hour?"**
+**A:** A history chart's bucket is the source's write cadence: an exporter that writes every
+5 minutes gets `interval: "5m"`. Finer only repeats the same sample; coarser hides detail the data
+has. Name the bucket in the title ("— 5-minute average"). Grafana's `interval` is only a minimum,
+and Grafana widens buckets to fit the panel's pixels. So set the page's default range so the finest
+chart still draws one bar per bucket (about 12 h for 5-minute buckets). Give each per-day or weekly
+chart its own range (`timeFrom: "14d"`), so a short page default does not cut it to one bar.
 
 **Q: "Can I trust this number?"** This one is asked most, and it has four answers:
 
@@ -152,6 +174,7 @@ invisible here"). An unnamed gap reads as green.
    so on.
 5. **Generate, don't hand-edit.** Write a generator that reads the *original* JSON and writes the new
    one, using `scripts/sitrep.py` (`sheet`, `history`, `today`, `opened_closed`, `registry`, `finish`).
+   `history` requires `interval`, the source's cadence; `finish(d, time_range=...)` sets the page default.
    Start from `examples/refactor_example.py`. Keep the generator, the original and the assets together,
    so the next change is a rerun. Write the JSON in the file's own format (indent, `ensure_ascii`): the diff then
    shows the change, not a reformat. `finish()` refuses overlapping or over-wide panels.
@@ -181,7 +204,7 @@ invisible here"). An unnamed gap reads as green.
 | Data | `rows(ref)` → `[{labels, value}]`; `one(ref)`; `table(ref)` for Infinity or SQL frames |
 | Links | `repoA`, `prA`, `commitA`, `fileA`, `wfA`, `refA`, `linkify(text, repo)` |
 | Values | `dur`, `pct`, `num`, `usd`; `lvl(x, [[0,'ok'],[2,'warn'],[6,'bad']])`; `worst(states)` |
-| Layout | `page(no, title, body)`, `brief`, `sub`, `ln(label, value, state, note)`, `item(text, state, wrap)`, `foot`, `raw(text)` for a file shown as written |
+| Layout | `page(no, title, body)`, `brief`, `sub`, `ln(label, value, state, note)`, `item(text, state, wrap, tip)` (`tip` = hover text), `fx(w, html)` (a fixed-width column of `w` ch), `foot`, `raw(text)` for a file shown as written |
 | Columns | `<div class="cols">…</div>` |
 
 Rules:
@@ -191,8 +214,10 @@ Rules:
 - **Write the verdict last.** Compute it from the same values the lines show, so the two cannot
   disagree. Its priority order is the sheet's: stuck/red first, then silent drivers, then idle for
   cause, then the all-clear.
-- **Cap lists.** Show five items, then `+N more`. Long free text wraps (`item(..., true)`). Everything
-  else truncates with an ellipsis.
+- **Cap lists.** Show five items, then `+N more`. Long free text that must be read wraps
+  (`item(..., true)`), or else goes whole into the line's hover `tip`. An ellipsis is only a fallback
+  for a narrow panel, never the only way to read the text.
+- **Lead with the fixed fields.** `fx()` columns first, then the free text (see §2).
 
 ## 5. Files
 

@@ -50,11 +50,12 @@ const html = page('01', 'Deploy gates', brief(verdict) + lines.join(''));
     ds=PROM, repos=REPOS,
 ))
 panels.append(sitrep.history(
-    2, "Deploy gates red — hourly average",
-    "How many deploy gates were red, per hour, by repo. Reads the `ci_workflow_red` gauge (0/1 per gate) averaged "
+    2, "Deploy gates red — 5-minute average",
+    "How many deploy gates were red, per 5 minutes, by repo. Reads the `ci_workflow_red` gauge (0/1 per gate) averaged "
     "per bucket, so the stack never exceeds the gate count.",
     {"h": 10, "w": 16, "x": 8, "y": y},
     [sitrep.q("A", 'sum by (repo) (avg_over_time(ci_workflow_red{workflow=~"(?i)deploy.*"}[$__interval]))', PROM, "{{repo}}", instant=False)],
+    interval="5m",  # the exporter's pass: one bucket per sample written
 ))
 y += 10
 
@@ -66,5 +67,5 @@ if 7 in old:
     y += 6
 
 src["panels"] = panels
-Path(sys.argv[2]).write_text(json.dumps(sitrep.finish(src), indent=1, ensure_ascii=False) + "\n")
+Path(sys.argv[2]).write_text(json.dumps(sitrep.finish(src, time_range="12h"), indent=1, ensure_ascii=False) + "\n")
 print(f"{len(panels)} panels, height {y}")

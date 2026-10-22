@@ -81,21 +81,28 @@ def sheet(pid, title, desc, grid, targets, body_js, *, ds, repos=None, forge="ht
     }
 
 
-def history(pid, title, desc, grid, targets, *, unit="short", stack=True, bars=False, colors=None):
+def history(pid, title, desc, grid, targets, *, interval, time_from=None, unit="short", stack=True, bars=False,
+            colors=None):
     """A time series beside a sheet. Sample a GAUGE and average it per bucket (avg_over_time(g[$__interval])):
     a stack of slots can then never exceed the slot count. `increase()` of a total booked when work seals puts a
-    3-hour job into one bucket and draws the peak nobody believes."""
+    3-hour job into one bucket and draws the peak nobody believes.
+
+    `interval` is the bucket, and it has no default: set it to the source's write cadence (an exporter pass every
+    5 min -> "5m"). Finer only repeats one sample; coarser hides what the data has. Name it in the title
+    ("— 5-minute average"). `time_from` pins this chart's own range ("14d") for a per-day or weekly chart on a page
+    whose default range is set for the finest chart."""
     over = [{"matcher": {"id": "byRegexp", "options": rx},
              "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": c}}]} for rx, c in (colors or {}).items()]
     return {
         "id": pid, "type": "timeseries", "title": title, "description": desc, "gridPos": grid,
-        "datasource": targets[0]["datasource"], "targets": targets, "interval": "1h",
+        "datasource": targets[0]["datasource"], "targets": targets, "interval": interval,
         "fieldConfig": {"defaults": {
             "unit": unit, "min": None if bars else 0, "color": {"mode": "palette-classic"},
             "custom": {"drawStyle": "bars" if bars else "line", "fillOpacity": 80 if bars else 35, "lineWidth": 1,
                        "stacking": {"mode": "normal" if stack else "none", "group": "A"}, "showPoints": "never"},
         }, "overrides": over},
         "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "desc"}},
+        **({"timeFrom": time_from} if time_from else {}),
     }
 
 
@@ -113,9 +120,13 @@ def row(pid, title, y):
     return {"id": pid, "type": "row", "title": title, "collapsed": False, "panels": [], "gridPos": {"h": 1, "w": 24, "x": 0, "y": y}}
 
 
-def finish(d):
-    """Page-wide settings, then refuse a layout Grafana would silently reflow."""
+def finish(d, *, time_range=None):
+    """Page-wide settings, then refuse a layout Grafana would silently reflow. `time_range` ("12h") is the page's
+    default: short enough that the finest history chart draws one bar per bucket (Grafana's `interval` is only a
+    minimum, and it widens buckets to fit the panel's pixels)."""
     d["timezone"] = "browser"  # every timestamp in the reader's zone; "today" stays the UTC day the queries define
+    if time_range:
+        d["time"] = {"from": f"now-{time_range}", "to": "now"}
     cells = {}
     for p in d["panels"]:
         g = p["gridPos"]
