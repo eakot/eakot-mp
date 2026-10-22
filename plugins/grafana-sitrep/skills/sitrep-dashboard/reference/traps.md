@@ -24,6 +24,7 @@ there, so nobody "simplifies" one away.
 | 16 | In-flight lines whose title, topic and id started at a different column on every line | Variable text (title, topic) came first, and the fixed fields (lane, model, uptime) trailed it. | Fixed fields lead the line in `fx()` columns, and a small-set field (topic) gets a column padded to its longest value. Free text follows. |
 | 17 | A task text cut off mid-sentence by the ellipsis, with no way to read the rest | The line carried a 110-character clip of text that never fits. | The task leaves the line and shows whole on hover (`item(..., tip)`). |
 | 18 | Node names cut at half the line's width | The feed reused a title clipped to 48 characters to fit a Node Graph box. | The feed carries the full name beside the clipped one, and the sheet reads the full one. Never clip at the source for another view. |
+| 19 | `(**held**)` with its asterisks in every node name | Plan rows are markdown, and the name was passed through as written. | The feed strips `**…**` emphasis where it reads the name. A lone `*` stays. |
 
 ## Not traps, but rulings
 

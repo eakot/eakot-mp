@@ -104,6 +104,9 @@ an ellipsis that nobody can expand. Keep on the line only what fits, and move th
 (a task, a verdict) to the tooltip. A name is never shortened at the **source** to fit some other
 view: when a feed clips a field to fit a graph box, add a full-length field beside it for the sheet.
 Shorten at render time only, and keep the clipped copy only where the narrow view needs it.
+A name is plain text, too: when it comes from markdown (a plan row, an issue title), the feed strips
+the emphasis (`**held**` → `held`) where it reads the name, so no view shows the asterisks. Strip
+only the `**…**` pairs: a lone `*` (`test_*.py`) is part of the name.
 
 **Q: "What happened in the last hour?"**
 **A:** A history chart's bucket is the source's write cadence: an exporter that writes every
