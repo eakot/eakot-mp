@@ -31,6 +31,8 @@ there, so nobody "simplifies" one away.
 | 23 | "Fills in ~4811d 14h at the 24-h trend" | A 24-hour `deriv` on a disk that does not move, divided into the free space. | Cap the forecast at 30 days for a 24-hour window. Further out reads "not filling within 30 d". |
 | 24 | (caught before shipping) A sheet keyed on `labels.__name__` from `count by (__name__)` | Whether a frame's labels carry `__name__` depends on the datasource and the query, so the key was never reliable. | `label_replace` the name into a plain label (`metric`). `sheet_harness.py` leaves `__name__` out, so a sheet that relies on it fails the dry run. |
 | 23 | A wait column reading `415 h 21 m`, `9 h 52 m`, `2 h 13 m`: the digits never lined up | The duration was formatted per value: its width followed the number, and HTML collapsed any padding space. | `durCol(s)`: two units, each number padded to two places with a figure space (U+2007, not collapsed, a digit's width), the value right-aligned to 9 characters. |
+| 24 | A lane graph whose nodes said `done` inside the circle, in the ring colour, and again in the legend; the name and topic hung under the circle and collided | Grafana's Node Graph draws circles only: mainstat inside, title and subtitle under it. | `flow()`: a rectangle per node with id, name and topic inside, and the state written once under it. Node Graph is not used for sitrep graphs. |
+| 25 | A merge graph 31 rows tall and one node wide | The layered layout puts every node of a fan-out in one column: 31 PRs, each pointing at `main`, made 31 rows. | Chain the fan-out by the queue's own order (train link order, oldest first, longest wait first): one row per queue. |
 
 ## Not traps, but rulings
 
