@@ -96,7 +96,10 @@ off the page.
 lane, model, uptime, and any field drawn from a small known set (a topic: pad the column to the
 longest value). Free text, the title, a PR ref and so on, comes after them. Each line then reads
 like a table row, and the eye finds the title at the same column on every line. A short field
-placed after the title moves around and reads as noise.
+placed after the title moves around and reads as noise. A number in a column is fixed-width too:
+pad it, so "22 h" and " 5 h" end at the same column. A duration in a column is `durCol(s)` (two
+units, each padded to two places with a figure space, right-aligned to 9 characters); `dur(s)` is
+for a value inside a sentence.
 
 **Q: "The text is cut off. What does it say?"**
 **A:** Text too long for its line goes to a hover tooltip (`item(text, state, wrap, tip)`), not to
@@ -251,7 +254,7 @@ invisible here"). An unnamed gap reads as green.
 |---|---|
 | Data | `rows(ref)` → `[{labels, value}]`; `one(ref)`; `table(ref)` for Infinity or SQL frames |
 | Links | `repoA`, `prA`, `commitA`, `fileA`, `wfA`, `refA`, `linkify(text, repo)` |
-| Values | `dur`, `pct`, `num`, `usd`; `lvl(x, [[0,'ok'],[2,'warn'],[6,'bad']])`; `worst(states)` |
+| Values | `dur` (inline), `durCol` (a fixed-width column), `pct`, `num`, `usd`; `lvl(x, [[0,'ok'],[2,'warn'],[6,'bad']])`; `worst(states)` |
 | Layout | `page(no, title, body)`, `brief`, `sub`, `ln(label, value, state, note)`, `item(text, state, wrap, tip)` (`tip` = hover text), `fx(w, html)` (a fixed-width column of `w` ch), `foot`, `raw(text)` for a file shown as written |
 | Columns | `<div class="cols">…</div>` |
 

@@ -30,6 +30,7 @@ there, so nobody "simplifies" one away.
 | 22 | "Collectors failing: pressure, conntrack — WARN, sheet lines are N/D" on a PVE node whose memory-stall line read fine | `node_scrape_collector_success == 0` means one file failed, not that the series are gone: the node lacks the irq-PSI and conntrack-stats files. | Map each producer to a series it must yield and test that series for presence. Failed with the series present = INFO "partial". Failed with the series gone = WARN. |
 | 23 | "Fills in ~4811d 14h at the 24-h trend" | A 24-hour `deriv` on a disk that does not move, divided into the free space. | Cap the forecast at 30 days for a 24-hour window. Further out reads "not filling within 30 d". |
 | 24 | (caught before shipping) A sheet keyed on `labels.__name__` from `count by (__name__)` | Whether a frame's labels carry `__name__` depends on the datasource and the query, so the key was never reliable. | `label_replace` the name into a plain label (`metric`). `sheet_harness.py` leaves `__name__` out, so a sheet that relies on it fails the dry run. |
+| 23 | A wait column reading `415 h 21 m`, `9 h 52 m`, `2 h 13 m`: the digits never lined up | The duration was formatted per value: its width followed the number, and HTML collapsed any padding space. | `durCol(s)`: two units, each number padded to two places with a figure space (U+2007, not collapsed, a digit's width), the value right-aligned to 9 characters. |
 
 ## Not traps, but rulings
 

@@ -57,6 +57,18 @@ const dur = (s) => {
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
   return d ? `${d}d ${String(h).padStart(2, '0')}h` : h ? `${h}h ${String(m).padStart(2, '0')}m` : m ? `${m}m` : `${s}s`;
 };
+// A duration in a COLUMN: one width for every value, so "22 h" and " 5 h" line up. Two units, each number padded
+// to two places with a FIGURE SPACE (a digit's width in any font, and never collapsed by HTML), the whole value
+// right-aligned to 9: "17 d  7 h", " 9 h 57 m", "     45 m". `dur` stays for a value inside a sentence.
+const FIG = '\u2007';
+const durCol = (s) => {
+  if (s == null) return '—'.padStart(9, FIG);
+  s = Math.max(0, Math.round(s));
+  const p2 = (n) => String(n).padStart(2, FIG);
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  const v = d ? `${p2(d)} d ${p2(h)} h` : h ? `${p2(h)} h ${p2(m)} m` : m ? `${p2(m)} m` : `${p2(s)} s`;
+  return v.padStart(9, FIG);
+};
 const pct = (x, d) => (x == null ? '—' : `${(x * 100).toFixed(d == null ? 0 : d)}%`);
 const num = (x, d) => (x == null ? '—' : Number(x).toFixed(d || 0));
 const usd = (x) => (x == null ? '—' : x >= 100 ? `$${Math.round(x).toLocaleString('en-US')}` : `$${x.toFixed(2)}`);
