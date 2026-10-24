@@ -108,7 +108,10 @@ first (id, then the name, then the topic or the wait); the state reads **once, u
 its level's colour. Dependencies are arrows between boxes. Do not use Grafana's Node Graph for a
 sitrep graph: its circles put the state inside and the name under the node, repeat the state as
 a ring colour that needs a legend, and stack every node of a fan-out into one column (31 PRs drew
-31 rows). Order a fan-out into chains by the queue's own order instead.
+31 rows). Order a fan-out into chains by the queue's own order instead. A row flows toward its
+exit: the back of the queue on the left, the front (next to leave, longest wait) on the right,
+beside where it goes. Drawn front-first, a red stuck item "leads to" a yellow one and the reader
+takes the arrow for a dependency. Say in the footer that an arrow inside a row is order.
 
 **Q: "The text is cut off. What does it say?"**
 **A:** Text too long for its line goes to a hover tooltip (`item(text, state, wrap, tip)`), not to
