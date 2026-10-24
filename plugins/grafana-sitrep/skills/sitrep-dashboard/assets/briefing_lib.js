@@ -107,11 +107,13 @@ const worst = (states) => ['bad', 'warn', 'nd', 'ok', 'info', 'idle'].find((s) =
 //   edges = [{from, to, kind}]   kind = a CSS class: 'next' (order in the row), 'after' (a dependency), 'land'
 // The edges are drawn by afterRender (sitrep.py), because the panel's sanitizer keeps no <svg> in html.
 const flowKey = (k) => 'fk-' + String(k).replace(/[^\w-]/g, '_');
+// opt.w = box width in ch (30), opt.lines = box height in lines (3). Inside the html, `<div class="w2">` wraps a long
+// text (a task, a verdict, a title) over two lines and clips the rest; put the whole text in the node's `tip`.
 const flow = (rows, edges, opt) => {
-  const w = (opt && opt.w) || 30;
+  const w = (opt && opt.w) || 30, lines = (opt && opt.lines) || 3;
   const box = (n) => {
     return `<div class="fn ${flowKey(n.key)}"${n.tip ? ` title="${esc(n.tip)}"` : ''}>` +
-      `<div class="fb s-${n.state || 'idle'}" style="width:${w}ch">${n.html}</div>` +
+      `<div class="fb s-${n.state || 'idle'}" style="width:${w}ch;height:${(lines * 1.45).toFixed(2)}em">${n.html}</div>` +
       `<div class="fs s-${n.state || 'idle'}">${esc(n.below || '')}</div></div>`;
   };
   // `col` (optional) pins a node under a column of the rows above, so a dependency is a short vertical arrow;

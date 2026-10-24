@@ -265,7 +265,7 @@ invisible here"). An unnamed gap reads as green.
 | Links | `repoA`, `prA`, `commitA`, `fileA`, `wfA`, `refA`, `linkify(text, repo)` |
 | Values | `dur` (inline), `durCol` (a fixed-width column), `pct`, `num`, `usd`; `lvl(x, [[0,'ok'],[2,'warn'],[6,'bad']])`; `worst(states)` |
 | Layout | `page(no, title, body)`, `brief`, `sub`, `ln(label, value, state, note)`, `item(text, state, wrap, tip)` (`tip` = hover text), `fx(w, html)` (a fixed-width column of `w` ch), `foot`, `raw(text)` for a file shown as written |
-| Graphs | `flow(rows, edges, {w})`: rows of rectangles, text inside, state under; edges drawn after render |
+| Graphs | `flow(rows, edges, {w, lines})`: rows of rectangles, text inside, state under; edges drawn after render. Fill the box: `<div class="w2">` wraps a task or verdict over two lines, the whole of it in `tip` |
 | Columns | `<div class="cols">…</div>` |
 
 Rules:
