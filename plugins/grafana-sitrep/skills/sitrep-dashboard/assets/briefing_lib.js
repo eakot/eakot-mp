@@ -96,3 +96,37 @@ const foot = (text) => `<div class="ft">${text}</div>`;
 const raw = (text) => `<pre class="raw">${esc(text).replace(/\n/g, '&#10;')}</pre>`;
 const page = (no, title, body) => `<div class="bp"><div class="hd"><span class="no">${no}</span><span class="ti">${title}</span></div>${body}</div>`.replace(/\n\s*/g, '');
 const worst = (states) => ['bad', 'warn', 'nd', 'ok', 'info', 'idle'].find((s) => states.includes(s)) || 'idle';
+
+// ---- graph views: rectangles in rows ----
+// A graph is rows of RECTANGLES, read left to right: one row per lane / queue, nodes in their real order.
+// The text sits INSIDE the box (fixed fields first: id, then the name, then the topic); the state reads ONCE,
+// UNDER the box, in its state colour. Grafana's Node Graph draws circles, with the state inside and the name
+// under them, so it is not used for a sitrep graph.
+//   rows  = [{label, nodes: [{key, html, state, below, tip, col}]}]   html = the box's inside (escape it!); link the name
+//   INSIDE it with a(), never wrap the box in <a>: a block inside a link loses the sheet's font.
+//   edges = [{from, to, kind}]   kind = a CSS class: 'next' (order in the row), 'after' (a dependency), 'land'
+// The edges are drawn by afterRender (sitrep.py), because the panel's sanitizer keeps no <svg> in html.
+const flowKey = (k) => 'fk-' + String(k).replace(/[^\w-]/g, '_');
+// opt.w = box width in ch (30), opt.lines = box height in lines (3). Inside the html, `<div class="w2">` wraps a long
+// text (a task, a verdict, a title) over two lines and clips the rest; put the whole text in the node's `tip`.
+const flow = (rows, edges, opt) => {
+  const w = (opt && opt.w) || 30, lines = (opt && opt.lines) || 3;
+  const box = (n) => {
+    return `<div class="fn ${flowKey(n.key)}"${n.tip ? ` title="${esc(n.tip)}"` : ''}>` +
+      `<div class="fb s-${n.state || 'idle'}" style="width:${w}ch;height:${(lines * 1.45).toFixed(2)}em">${n.html}</div>` +
+      `<div class="fs s-${n.state || 'idle'}">${esc(n.below || '')}</div></div>`;
+  };
+  // `col` (optional) pins a node under a column of the rows above, so a dependency is a short vertical arrow;
+  // a taken column moves the node to the next free one, and empty columns keep their width.
+  const place = (nodes) => {
+    if (!nodes.some((n) => Number.isInteger(n.col))) return nodes.map(box).join('');
+    const at = [];
+    nodes.forEach((n) => { let c = Number.isInteger(n.col) ? n.col : at.length; while (at[c]) c++; at[c] = n; });
+    return Array.from(at, (n) => (n ? box(n) : `<div class="fn fgap" style="width:${w}ch"></div>`)).join('');
+  };
+  const body = rows.filter((r) => r.nodes.length).map((r) =>
+    `<div class="fr"><div class="fl">${esc(r.label)}</div><div class="fns">${place(r.nodes)}</div></div>`).join('');
+  const keys = new Set(rows.flatMap((r) => r.nodes.map((n) => flowKey(n.key))));
+  const E = (edges || []).map((e) => [flowKey(e.from), flowKey(e.to), e.kind || 'next']).filter(([a, b]) => keys.has(a) && keys.has(b));
+  return `<div class="flow">${body}<span class="fe" style="display:none">${esc(JSON.stringify(E))}</span></div>`;
+};

@@ -53,6 +53,47 @@ def registry(url, ds, root="repos"):
     }
 
 
+# Runs after the panel renders: links open in a new tab (the sanitizer drops `target`), and each flow() graph gets
+# its edges, drawn in svg built through the DOM because html <svg> does not survive the sanitizer.
+AFTER_RENDER = r"""
+context.element.querySelectorAll('a[href^="https://"]').forEach((el) => { el.target = '_blank'; el.rel = 'noopener noreferrer'; });
+// Drawn again once the web font is in (it narrows every box: drawn before, the arrows drift ~26 px a column)
+// and on every resize of the graph.
+const drawFlow = (f) => {
+  const src = f.querySelector('.fe'); if (!src) return;
+  let E; try { E = JSON.parse(src.textContent); } catch (e) { return; }
+  f.querySelectorAll('svg.fsvg').forEach((s) => s.remove());
+  const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg'), base = f.getBoundingClientRect();
+  svg.setAttribute('class', 'fsvg'); svg.setAttribute('width', f.scrollWidth); svg.setAttribute('height', f.scrollHeight);
+  const defs = document.createElementNS(NS, 'defs'), mk = document.createElementNS(NS, 'marker'), tip = document.createElementNS(NS, 'path');
+  mk.setAttribute('id', 'fh'); mk.setAttribute('viewBox', '0 0 8 8'); mk.setAttribute('refX', '8'); mk.setAttribute('refY', '4');
+  mk.setAttribute('markerWidth', '7'); mk.setAttribute('markerHeight', '7'); mk.setAttribute('orient', 'auto');
+  tip.setAttribute('d', 'M0,0 L8,4 L0,8 z'); tip.setAttribute('style', 'fill:#8b949e;stroke:none'); mk.appendChild(tip); defs.appendChild(mk); svg.appendChild(defs);
+  const at = (k) => { const b = f.querySelector('.' + k + ' .fb'); if (!b) return null; const r = b.getBoundingClientRect();
+    return { l: r.left - base.left + f.scrollLeft, r: r.right - base.left + f.scrollLeft, t: r.top - base.top + f.scrollTop, b: r.bottom - base.top + f.scrollTop }; };
+  E.forEach(([a, b, kind]) => {
+    const p = at(a), q = at(b); if (!p || !q) return;
+    // same row: side to side. Rows apart: out of the source's bottom centre (under its state word), into the
+    // target's top centre, with a dot at the start, so a long arrow never reads as leaving a box it only crosses.
+    const sameRow = Math.abs(p.t - q.t) < 4; let d, x0, y0;
+    if (sameRow) { const y = (p.t + p.b) / 2, dx = Math.max(16, (q.l - p.r) / 2); x0 = p.r; y0 = y; d = `M${p.r},${y} C${p.r + dx},${y} ${q.l - dx},${y} ${q.l},${y}`; }
+    else { const x1 = (p.l + p.r) / 2, x2 = (q.l + q.r) / 2, down = q.t > p.b;
+      x0 = x1; y0 = down ? p.b + 16 : p.t;
+      d = down ? `M${x1},${y0} C${x1},${y0 + 40} ${x2},${q.t - 40} ${x2},${q.t}` : `M${x1},${y0} C${x1},${y0 - 40} ${x2},${q.b + 56} ${x2},${q.b + 16}`;
+      const dot = document.createElementNS(NS, 'circle'); dot.setAttribute('cx', x0); dot.setAttribute('cy', y0); dot.setAttribute('r', 3); dot.setAttribute('class', kind); svg.appendChild(dot); }
+    const path = document.createElementNS(NS, 'path'); path.setAttribute('d', d); path.setAttribute('class', kind); path.setAttribute('marker-end', 'url(#fh)'); svg.appendChild(path);
+  });
+  f.style.position = 'relative'; f.insertBefore(svg, f.firstChild);
+};
+context.element.querySelectorAll('.flow').forEach((f) => {
+  drawFlow(f);
+  // not keyed on f's scroll size: the stale svg holds that size up, so a font swap would never redraw
+  if (document.fonts) { document.fonts.ready.then(() => drawFlow(f)); document.fonts.addEventListener('loadingdone', () => drawFlow(f)); }
+  if (window.ResizeObserver) new ResizeObserver(() => drawFlow(f)).observe(f.querySelector('.fr') || f);
+});
+""".strip()
+
+
 def sheet(pid, title, desc, grid, targets, body_js, *, ds, repos=None, forge="https://github.com", registry_target=None):
     """One status sheet: a Business Text panel whose helper renders the HTML that `body_js` assigns to `html`.
 
@@ -74,7 +115,7 @@ def sheet(pid, title, desc, grid, targets, body_js, *, ds, repos=None, forge="ht
             "editors": ["helpers", "afterRender", "styles"], "editor": {"format": "auto", "language": "html"},
             "helpers": js, "styles": CSS, "wrap": True, "status": "", "contentPartials": [],
             # Grafana's sanitizer drops `target`; put it back so a link never navigates the dashboard away
-            "afterRender": "context.element.querySelectorAll('a[href^=\"https://\"]').forEach((el) => { el.target = '_blank'; el.rel = 'noopener noreferrer'; });",
+            "afterRender": AFTER_RENDER,
             "externalStyles": [{"id": "fonts", "url": FONTS}],
         },
         "fieldConfig": {"defaults": {}, "overrides": []},

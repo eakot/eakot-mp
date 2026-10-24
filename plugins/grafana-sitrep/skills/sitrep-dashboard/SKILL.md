@@ -101,6 +101,18 @@ pad it, so "22 h" and " 5 h" end at the same column. A duration in a column is `
 units, each padded to two places with a figure space, right-aligned to 9 characters); `dur(s)` is
 for a value inside a sentence.
 
+**Q: "What depends on what, and where is it stuck?"**
+**A:** A graph view is rows of **rectangles**, drawn by `flow(rows, edges)`: one row per lane or
+queue, its nodes in their real order left to right. The text sits *inside* the box, fixed fields
+first (id, then the name, then the topic or the wait); the state reads **once, under** the box, in
+its level's colour. Dependencies are arrows between boxes. Do not use Grafana's Node Graph for a
+sitrep graph: its circles put the state inside and the name under the node, repeat the state as
+a ring colour that needs a legend, and stack every node of a fan-out into one column (31 PRs drew
+31 rows). Order a fan-out into chains by the queue's own order instead. A row flows toward its
+exit: the back of the queue on the left, the front (next to leave, longest wait) on the right,
+beside where it goes. Drawn front-first, a red stuck item "leads to" a yellow one and the reader
+takes the arrow for a dependency. Say in the footer that an arrow inside a row is order.
+
 **Q: "The text is cut off. What does it say?"**
 **A:** Text too long for its line goes to a hover tooltip (`item(text, state, wrap, tip)`), not to
 an ellipsis that nobody can expand. Keep on the line only what fits, and move the long remainder
@@ -256,6 +268,7 @@ invisible here"). An unnamed gap reads as green.
 | Links | `repoA`, `prA`, `commitA`, `fileA`, `wfA`, `refA`, `linkify(text, repo)` |
 | Values | `dur` (inline), `durCol` (a fixed-width column), `pct`, `num`, `usd`; `lvl(x, [[0,'ok'],[2,'warn'],[6,'bad']])`; `worst(states)` |
 | Layout | `page(no, title, body)`, `brief`, `sub`, `ln(label, value, state, note)`, `item(text, state, wrap, tip)` (`tip` = hover text), `fx(w, html)` (a fixed-width column of `w` ch), `foot`, `raw(text)` for a file shown as written |
+| Graphs | `flow(rows, edges, {w, lines})`: rows of rectangles, text inside, state under; edges drawn after render. Fill the box: `<div class="w2">` wraps a task or verdict over two lines, the whole of it in `tip` |
 | Columns | `<div class="cols">…</div>` |
 
 Rules:

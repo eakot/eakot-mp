@@ -38,3 +38,25 @@ a:hover { color: #7fdbff; border-bottom-color: #7fdbff; }
 .ft { color: #6e7681; font-size: 11px; border-top: 1px dashed rgba(110, 118, 129, 0.4); margin-top: 8px; padding-top: 3px; white-space: normal; }
 .raw { white-space: pre-wrap; word-break: break-word; margin: 6px 0 0; color: #e6edf3; font: inherit; }
 @keyframes bpblink { to { opacity: 0.55; } }
+.flow { font-family: 'Share Tech Mono', 'JetBrains Mono', 'Roboto Mono', ui-monospace, monospace; position: relative; overflow-x: auto; padding: 4px 0 8px; }
+.fr { display: flex; align-items: flex-start; margin: 0 0 12px; width: max-content; }
+.fl { flex: 0 0 16ch; width: 16ch; color: #7fdbff; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; padding-top: 4px; white-space: normal; position: sticky; left: 0; z-index: 2; background: #181b1f; }
+.fns { display: flex; gap: 4ch; }
+.fn { flex: 0 0 auto; position: relative; z-index: 1; }
+.fgap { box-sizing: content-box; padding: 0 8px 0 11px; }  /* a box's width: border 4+1 px, padding 7+7 px */
+.fb { border: 1px solid #30363d; border-left-width: 4px; border-radius: 2px; background: #11151a; padding: 3px 7px; box-sizing: content-box; height: 4.35em; overflow: hidden; line-height: 1.45em; white-space: nowrap; }
+.fb > div { overflow: hidden; text-overflow: ellipsis; }
+.fb > div.w2 { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; height: 2.9em; }
+.fs { text-align: center; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; color: #6e7681; }
+.fb.s-ok { border-color: #3fb950; } .fs.s-ok { color: #7ee787; }
+.fb.s-warn { border-color: #f0b72f; } .fs.s-warn { color: #f0b72f; }
+.fb.s-bad { border-color: #f85149; } .fs.s-bad { color: #ff7b72; }
+.fb.s-info { border-color: #58a6ff; } .fs.s-info { color: #58a6ff; }
+.fb.s-nd { border-color: #f0b72f; border-style: dashed; } .fs.s-nd { color: #f0b72f; }
+.fb.s-idle { border-color: #484f58; }
+.fsvg { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 0; }
+.fsvg path { fill: none; stroke: #6e7681; stroke-width: 1.3; }
+.fsvg path.after { stroke: #FF9830; stroke-dasharray: 6 3; }
+.fsvg path.land { stroke: #58a6ff; stroke-width: 1.8; }
+.fsvg path.wait { stroke: #8AB8FF; stroke-dasharray: 4 4; }
+.fsvg circle { fill: #6e7681; } .fsvg circle.after { fill: #FF9830; } .fsvg circle.land { fill: #58a6ff; } .fsvg circle.wait { fill: #8AB8FF; }
