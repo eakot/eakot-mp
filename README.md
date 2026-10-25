@@ -48,6 +48,16 @@ A live operator page made with `grafana-sitrep`, one row of two sheets:
 - **Every id, PR and issue is a link**, dimmed when it is secondary. Colour means state and nothing else.
   The background is flat, and nothing decorative crosses the text.
 
+![A sitrep merge graph: the merge train feeding main, the stuck front of the merge line, and the PRs waiting for review](docs/sitrep-flow-graph.png)
+
+A graph view from the same page, drawn by `flow(rows, edges)`:
+
+- **One row per queue**, labelled on the left: merge train, merge line, PRs with no review verdict.
+- **The text sits inside each rectangle**: id, author and topic first, then the title, then the wait.
+  The state is written once, under the box, in its level's colour: `LANDED`, `GREEN`, `STUCK`.
+- **Arrows are dependencies between rows and order within a row.** A row runs toward its exit, so the
+  longest wait sits on the right, next to where it goes.
+
 ## Adding a plugin
 
 One directory under `plugins/<name>/` with a `.claude-plugin/plugin.json`, plus one entry in
