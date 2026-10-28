@@ -142,10 +142,12 @@ class Sheet(unittest.TestCase):
         self.assertNotIn("&amp;amp;", out)
         self.assertNotIn("&amp;lt;", out)
         self.assertEqual(sheet_harness.text(out).splitlines()[-1].split(), ["p95", "<1s", "in&out", "a'b"])
-        s = mini_sheet(1, 0, "const html = page('01', 'T', brief('x') + cols([[0, 'n', 'r']]).row(['<b>&x']));")
+        s = mini_sheet(1, 0, "const T = cols([[0, 'a & <b>', 'r']]); const html = page('01', 'T', brief('x') + T.hdr + T.row(['<b>&x']));")
         js = sheet_harness.SHIM % "[]" + s["options"]["helpers"] + "\nprocess.stdout.write(String(OUT));\n"
         out = subprocess.run(["node", "-e", js], capture_output=True, text=True, check=True).stdout
         self.assertIn("&lt;b&gt;&amp;x", out)
+        self.assertIn("a &amp; &lt;b&gt;</div>", out)
+        self.assertNotIn("&amp;amp;", out)
 
     def test_redeclaring_a_library_name_is_refused(self):
         with self.assertRaisesRegex(SystemExit, "plural"):

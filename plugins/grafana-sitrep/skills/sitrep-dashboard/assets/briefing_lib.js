@@ -111,8 +111,8 @@ const fxr = (w, v) => `<span class="fx fxr" style="min-width:${w}ch">${esc((v ==
 const cols = (spec) => {
   const cell = ([w, , al], v, i) => (al === 'r' ? (w ? fxr(w, v) : esc(v)) : w ? fx(w, v) : v == null ? '' : String(v)) + (i < spec.length - 1 ? ' ' : '');
   return {
-    // a title is text: fxr escapes its own ('r'), fx takes html, so escape it here for those only
-    hdr: `<div class="it ch">${spec.map((c, i) => cell(c, c[2] === 'r' && c[0] ? c[1] : esc(c[1]), i)).join('')}</div>`,
+    // a title is text: an 'r' cell escapes its own (any width), the others take html, so escape it here for those only
+    hdr: `<div class="it ch">${spec.map((c, i) => cell(c, c[2] === 'r' ? c[1] : esc(c[1]), i)).join('')}</div>`,
     row: (values) => spec.map((c, i) => cell(c, values[i], i)).join(''),
   };
 };
