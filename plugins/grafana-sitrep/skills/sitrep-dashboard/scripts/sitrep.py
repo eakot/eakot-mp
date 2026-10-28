@@ -264,13 +264,13 @@ def carry_panels(src_panels, ids, y, title, *, id_offset=1000, row_id=None):
     return r, y + 1
 
 
-def coverage(src_panels, mapping, new_panels=None, questions=None):
+def coverage(src_panels, mapping, new_panels, questions=None):
     """The record of a full redraw: where each original panel's information went. `mapping` is
     {old_id: new_id | "covered-by:<id>" | "dropped:<reason>"} over every original panel but rows; `questions`
     optionally {old_id: "the question it answered"}. Refuses an unmapped original, an unknown target and a bare
     "dropped", so nothing leaves the page silently. Returns the coverage table (markdown) for the hand-over."""
     src = [p for p in walk(src_panels) if p.get("type") != "row"]
-    new = {p["id"]: p for p in walk(new_panels or [])}
+    new = {p["id"]: p for p in walk(new_panels)}  # required: a target is checked against the page, never assumed
     errs = [f"original panel {p['id']} {p.get('title')!r} is not mapped" for p in src if p["id"] not in mapping]
     known = {p["id"] for p in src}
     errs += [f"mapping names panel {k}, which the original does not have" for k in mapping if k not in known]
@@ -290,10 +290,10 @@ def coverage(src_panels, mapping, new_panels=None, questions=None):
             if not isinstance(nid, int) or isinstance(nid, bool):
                 errs.append(f"panel {p['id']}: {to!r} is not a new id, covered-by:<id> or dropped:<reason>")
                 continue
-            if new_panels is not None and nid not in new:
+            if nid not in new:
                 errs.append(f"panel {p['id']} maps to {nid}, which the new page does not have")
                 continue
-            t = new[nid].get("title", "") if nid in new else ""
+            t = new[nid].get("title", "")
             home = f"{'covered by ' if isinstance(to, str) else ''}{nid} {t}".strip()
         q = (questions or {}).get(p["id"], "")
         out.append(f"| {p['id']} | {p.get('title', '')} | {q} | {home} |".replace("\n", " "))

@@ -98,18 +98,22 @@ class Coverage(unittest.TestCase):
 
     def test_unmapped_original_is_refused(self):
         with self.assertRaisesRegex(SystemExit, "panel 2 'b' is not mapped"):
-            sitrep.coverage(self.SRC, {1: 10})
+            sitrep.coverage(self.SRC, {1: 10}, [{"id": 10}])
 
     def test_drop_needs_reason_and_target_must_exist(self):
         with self.assertRaisesRegex(SystemExit, "needs its reason"):
-            sitrep.coverage(self.SRC, {1: "dropped:", 2: 10})
+            sitrep.coverage(self.SRC, {1: "dropped:", 2: 10}, [{"id": 10}])
         with self.assertRaisesRegex(SystemExit, "does not have"):
             sitrep.coverage(self.SRC, {1: 10, 2: "covered-by:11"}, [{"id": 10, "title": "n"}])
 
     def test_malformed_targets_are_refused_not_crashed(self):
         for bad in ("covered-by:abc", "covered-by:", True):
             with self.assertRaisesRegex(SystemExit, "is not a new id"):
-                sitrep.coverage(self.SRC, {1: bad, 2: 10})
+                sitrep.coverage(self.SRC, {1: bad, 2: 10}, [{"id": 10}])
+
+    def test_unknown_target_is_refused(self):
+        with self.assertRaisesRegex(SystemExit, "maps to 9999"):
+            sitrep.coverage(self.SRC, {1: 9999, 2: 10}, [{"id": 10}])
 
     def test_table(self):
         t = sitrep.coverage(self.SRC, {1: 10, 2: "dropped:no reader"}, [{"id": 10, "title": "new"}], {1: "why?"})
@@ -138,6 +142,10 @@ class Sheet(unittest.TestCase):
         self.assertNotIn("&amp;amp;", out)
         self.assertNotIn("&amp;lt;", out)
         self.assertEqual(sheet_harness.text(out).splitlines()[-1].split(), ["p95", "<1s", "in&out", "a'b"])
+        s = mini_sheet(1, 0, "const html = page('01', 'T', brief('x') + cols([[0, 'n', 'r']]).row(['<b>&x']));")
+        js = sheet_harness.SHIM % "[]" + s["options"]["helpers"] + "\nprocess.stdout.write(String(OUT));\n"
+        out = subprocess.run(["node", "-e", js], capture_output=True, text=True, check=True).stdout
+        self.assertIn("&lt;b&gt;&amp;x", out)
 
     def test_redeclaring_a_library_name_is_refused(self):
         with self.assertRaisesRegex(SystemExit, "plural"):

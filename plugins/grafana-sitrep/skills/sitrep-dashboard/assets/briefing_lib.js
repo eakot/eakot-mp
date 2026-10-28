@@ -109,7 +109,7 @@ const fxr = (w, v) => `<span class="fx fxr" style="min-width:${w}ch">${esc((v ==
 //   T.hdr + rows.map((r) => item(T.row([int(r.calls), esc(r.tool), linkify(r.err)]), r.state)).join('')
 // Left-aligned cells are HTML, escaped by the caller, as with fx(); right-aligned ('r') cells are text, as with fxr().
 const cols = (spec) => {
-  const cell = ([w, , al], v, i) => (w ? (al === 'r' ? fxr(w, v) : fx(w, v)) : v == null ? '' : String(v)) + (i < spec.length - 1 ? ' ' : '');
+  const cell = ([w, , al], v, i) => (al === 'r' ? (w ? fxr(w, v) : esc(v)) : w ? fx(w, v) : v == null ? '' : String(v)) + (i < spec.length - 1 ? ' ' : '');
   return {
     // a title is text: fxr escapes its own ('r'), fx takes html, so escape it here for those only
     hdr: `<div class="it ch">${spec.map((c, i) => cell(c, c[2] === 'r' && c[0] ? c[1] : esc(c[1]), i)).join('')}</div>`,
