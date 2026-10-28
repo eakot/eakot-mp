@@ -43,12 +43,17 @@ def main():
             if e.code != 404:
                 raise SystemExit(f"reading the current dashboard: HTTP {e.code}")
             folder = ""
+        except OSError as e:  # URLError, a timeout, a reset: the network, not the request
+            raise SystemExit(f"reading the current dashboard: {getattr(e, 'reason', e)}")
     d = dict(d, id=None)
     body = {"dashboard": d, "overwrite": True, "message": a.message, **({"folderUid": folder} if folder else {})}
     try:
         r = grafana_api.call(base, "/api/dashboards/db", tok, body)
     except urllib.error.HTTPError as e:
         raise SystemExit(f"deploy refused: HTTP {e.code} {e.read()[:300].decode(errors='replace')}")
+    except OSError as e:
+        raise SystemExit(f"deploy failed, Grafana not reached: {getattr(e, 'reason', e)}. Nothing was saved, or check "
+                         "the dashboard's version history before retrying")
     print(f"{r.get('status')}: {base}{r.get('url')} version {r.get('version')} ({len(json.dumps(d)) // 1024} KB)")
     return 0
 

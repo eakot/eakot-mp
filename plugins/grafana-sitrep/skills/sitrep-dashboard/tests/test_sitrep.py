@@ -122,6 +122,10 @@ class Coverage(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "maps to 9999"):
             sitrep.coverage(self.SRC, {1: 9999, 2: 10}, [{"id": 10}])
 
+    def test_parity_ignores_inf_nan_in_any_case(self):
+        names, _ = sitrep.promql_parts("clamp_max(x_total, +Inf) or y_total > NaN or z > inf")
+        self.assertEqual(names, {"x_total", "y_total", "z"})
+
     def test_table(self):
         t = sitrep.coverage(self.SRC, {1: 10, 2: "dropped:no reader"}, [{"id": 10, "title": "new"}], {1: "why?"})
         self.assertIn("| 1 | a | why? | 10 new |", t)
@@ -169,6 +173,13 @@ class Sheet(unittest.TestCase):
         js = sheet_harness.SHIM % "[]" + s["options"]["helpers"] + "\nprocess.stdout.write(String(OUT));\n"
         out = subprocess.run(["node", "-e", js], capture_output=True, text=True, check=True).stdout
         self.assertIn("NaN|0|1,234", out)
+
+    def test_shadowing_inside_a_block_is_allowed(self):
+        body = "const f = (x) => {\nconst sub = x + 1;\nreturn sub;\n};\nif (true) {\nlet int = 2;\n}\n" \
+               "const s = '{ const plural = 1';\nconst html = page('01', 'T', brief(String(f(1))));"
+        mini_sheet(1, 0, body)
+        with self.assertRaisesRegex(SystemExit, "plural"):
+            mini_sheet(1, 0, "  const plural = 1;\n  const html = page('01', 'T', brief('x'));")
 
     def test_const_also_declared_in_body_is_refused(self):
         with self.assertRaisesRegex(SystemExit, "keep one"):
@@ -412,6 +423,19 @@ class Live(unittest.TestCase):
                            text=True, env=env, timeout=60)
         self.assertEqual(r.returncode, 1)
         self.assertIn("needs a service-account token", r.stderr)
+
+    def test_deploy_network_failure_is_a_message(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump(self.dash(), f)
+        # preflight succeeds here; the dashboard host does not exist, so the failure is the network's
+        env = dict(os.environ, GRAFANA_TOKEN="glsa_good")
+        code = ("import sys, runpy; sys.path.insert(0, %r); import grafana_api; grafana_api.preflight = lambda b, t: None; "
+                "sys.argv = ['deploy.py', %r, 'http://127.0.0.1:9/d/u']; runpy.run_path(%r, run_name='__main__')"
+                % (str(SKILL / "scripts"), f.name, str(SKILL / "scripts" / "deploy.py")))
+        r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env, timeout=60)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertIn("reading the current dashboard", r.stderr)
 
     def test_redirect_without_a_token_is_followed(self):
         req = urllib.request.Request(self.url + "/hop")
