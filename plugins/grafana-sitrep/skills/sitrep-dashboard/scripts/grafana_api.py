@@ -23,8 +23,10 @@ _OPENER = urllib.request.build_opener(_NoRedirect)
 
 
 def urlopen(req, timeout=60):
-    """urllib.request.urlopen that never follows a redirect: every request here carries the token."""
-    return _OPENER.open(req, timeout=timeout)
+    """urllib.request.urlopen that never follows a redirect while the request carries a token."""
+    if req.has_header("Authorization"):
+        return _OPENER.open(req, timeout=timeout)
+    return urllib.request.urlopen(req, timeout=timeout)
 
 
 def token():

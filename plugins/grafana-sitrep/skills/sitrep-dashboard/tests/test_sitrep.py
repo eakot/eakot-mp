@@ -11,10 +11,13 @@ import sys
 import tempfile
 import threading
 import unittest
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 SKILL = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SKILL / "scripts"))
+import grafana_api  # noqa: E402
 import sheet_harness  # noqa: E402
 import sitrep  # noqa: E402
 
@@ -241,6 +244,12 @@ class Harness(unittest.TestCase):
         r = harness({"panels": [ok]}, "--empty")
         self.assertEqual(r.returncode, 0, r.stdout)
 
+    def test_empty_run_probe_reads_labels(self):
+        ok = mini_sheet(1, 0, "const n = rows('A').map((r) => r.labels.repo.toUpperCase()); const html = page('01', 'T', brief('x')"
+                              " + ln('window', '30 days', 'idle') + ln('n', n.length ? n.join() : '—', n.length ? 'idle' : 'nd'));")
+        r = harness({"panels": [ok]}, "--empty")
+        self.assertEqual(r.returncode, 0, r.stdout)
+
     def test_builtins_are_substituted(self):
         e = sheet_harness.subst("x[$__range_s] @ ${__to} $__from $__interval_ms $job", {"job": "j"})
         self.assertNotIn("$", e)
@@ -376,6 +385,12 @@ class Live(unittest.TestCase):
                            capture_output=True, text=True, timeout=120)
         self.assertIn("UNCHECKED [5] mixed", r.stdout)
         self.assertIn("2 target(s) UNCHECKED", r.stdout)
+
+    def test_redirect_without_a_token_is_followed(self):
+        req = urllib.request.Request(self.url + "/hop")
+        with self.assertRaises(urllib.error.URLError) as e:  # followed to evil.invalid, which does not resolve
+            grafana_api.urlopen(req, timeout=5)
+        self.assertNotIn("refused", str(e.exception))
 
     def test_redirect_is_not_followed_with_the_token(self):
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:

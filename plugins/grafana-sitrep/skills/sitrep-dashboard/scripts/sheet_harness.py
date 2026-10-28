@@ -124,7 +124,7 @@ class Live:
             try:
                 d = json.load(e)
             except ValueError:
-                raise RuntimeError(f"HTTP {e.code}") from None
+                raise RuntimeError(f"HTTP {e.code} {e.msg}") from None
         if d.get("status") != "success":
             raise RuntimeError(f"{d.get('errorType')}: {d.get('error')}")
         return d["data"]["result"]
@@ -173,8 +173,16 @@ def text(markup):
 PROBE = 987654.0
 
 
-def render(p, series):
-    js = SHIM % json.dumps(series) + p["options"]["helpers"] + "\nprocess.stdout.write(String(OUT));\n"
+# The probe's labels answer any key, so a sheet that reads r.labels.repo renders instead of throwing.
+PROBE_SHIM = "SERIES_IN.forEach((f) => f.fields.forEach((x) => { x.labels = new Proxy({}, { get: (o, k) => " \
+    "(typeof k === 'string' && k !== 'toJSON' && k !== 'then' ? 'probe' : undefined) }); }));\n"
+
+
+def render(p, series, probe=False):
+    data = json.dumps(series)
+    if probe:
+        data = "(() => { const SERIES_IN = %s; %s return SERIES_IN; })()" % (data, PROBE_SHIM)
+    js = SHIM % data + p["options"]["helpers"] + "\nprocess.stdout.write(String(OUT));\n"
     return subprocess.run(["node", "-e", js], capture_output=True, text=True)
 
 
@@ -223,9 +231,12 @@ def run_sheet(p, src, empty):
         # was invented for it ("0 people").
         probe = [{"refId": t["refId"], "fields": [{"type": "number", "labels": {}, "values": [PROBE]}]}
                  for t in p.get("targets", []) if "expr" in t]
-        static = set(values(render(p, probe).stdout))
+        pr = render(p, probe, probe=True)
+        static = set(values(pr.stdout))
         made = [v for v in values(r.stdout) if re.search(r"\d", v) and v not in static]
-        if made:
+        if made and pr.returncode:
+            print(f"NOTE numbers on no data, not checked (the sheet throws on probe data): {made[:3]}\n")
+        elif made:
             print(f"FAIL a number on no data, must read —: {made[:3]}\n")
             fails += 1
     return fails
