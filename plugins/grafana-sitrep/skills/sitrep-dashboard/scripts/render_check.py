@@ -8,15 +8,27 @@
 The token is read from the environment or from the file GRAFANA_TOKEN_FILE names, never from argv (argv is
 visible to every user in `ps`). The file form lets the check reuse the token an MCP server already keeps on
 disk (mcp-grafana's GRAFANA_SERVICE_ACCOUNT_TOKEN_FILE) without the token passing through a shell or a log.
+It must be a Grafana service-account token (`glsa_...`): the script checks it against the API before rendering, and
+says so when it is some other token, such as a gateway's.
 For a templated page, put the variables in the URL (`&var-node=...`); the page otherwise opens on its default. Exit 1 if any
 check fails; the screenshot is written either way, so read it with the operator's eyes after the numbers pass.
+
+Playwright is optional. Without it, open the page in a browser and check by hand what CHECKS below checks: every
+sheet rendered (none blank, none showing the helper's source), links open a new tab, no `undefined`/`NaN`/
+`[object Object]`, every sheet has its verdict line, no panel reads "No data", the browser console has no errors.
 """
 import asyncio
 import collections
-import os
 import sys
+from pathlib import Path
 
-from playwright.async_api import async_playwright
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import grafana_api  # noqa: E402
+
+try:
+    from playwright.async_api import async_playwright
+except ImportError:
+    async_playwright = None
 
 CHECKS = """() => {
   const sheets = [...document.querySelectorAll('.bp')];
@@ -36,14 +48,20 @@ CHECKS = """() => {
 
 
 async def main(url, shot):
-    token = os.environ.get("GRAFANA_TOKEN")
-    if not token and os.environ.get("GRAFANA_TOKEN_FILE"):
-        with open(os.environ["GRAFANA_TOKEN_FILE"]) as f:
-            token = f.read().strip()
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    token = grafana_api.token()
+    grafana_api.preflight(grafana_api.base_of(url), token)
+    origin = "/".join(url.split("/", 3)[:3])  # scheme://host[:port]
     async with async_playwright() as p:
         b = await p.chromium.launch()
-        pg = await b.new_page(viewport={"width": 1800, "height": 3400}, extra_http_headers=headers)
+        pg = await b.new_page(viewport={"width": 1800, "height": 3400})
+        if token:
+            # the token goes to Grafana only: the page also loads fonts and images from other hosts
+            async def auth(route, request):
+                if request.url == origin or request.url.startswith(origin + "/"):
+                    await route.continue_(headers={**request.headers, "authorization": f"Bearer {token}"})
+                else:
+                    await route.continue_()
+            await pg.route("**/*", auth)
         errors = []
         pg.on("pageerror", lambda e: errors.append(str(e)[:300]))
         await pg.goto(url, wait_until="load", timeout=90000)
@@ -69,7 +87,7 @@ async def main(url, shot):
     if r["junk"]:
         fails.append(f"{r['junk']} undefined/NaN string(s) on the sheets")
     if r["noSitrep"]:
-        fails.append(f"sheets without a SITREP line: {r['noSitrep']}")
+        fails.append(f"sheets without a verdict line: {r['noSitrep']}")
     if r["noData"]:
         fails.append(f"panels reading 'No data': {r['noData']}")
     if errors:
@@ -83,4 +101,7 @@ async def main(url, shot):
 if __name__ == "__main__":
     if len(sys.argv) != 3:
         sys.exit(__doc__)
+    if async_playwright is None:
+        sys.exit("playwright is not installed: pip install playwright && playwright install chromium, "
+                 "or check the page by hand (see the end of this script's docstring)")
     sys.exit(asyncio.run(main(sys.argv[1], sys.argv[2])))

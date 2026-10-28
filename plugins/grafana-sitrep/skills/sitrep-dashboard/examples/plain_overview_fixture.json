@@ -1,0 +1,6 @@
+{
+ "A": [[{}, 15]],
+ "B": [[{"login": "ann"}, 12], [{"login": "bob"}, 2], [{"login": "cid"}, 7], [{"login": "constructor"}, 1],
+       [{"login": "d'arcy <b>"}, 9]],
+ "C": [[{"kind": "search"}, 12840], [{"kind": "edit"}, 3051], [{"kind": "constructor#5"}, 4], [{"kind": "constructor"}, 2]]
+}

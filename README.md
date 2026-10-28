@@ -20,9 +20,9 @@ worth sharing. Every plugin here works in any repository and names none.
 | [Business Text](https://grafana.com/grafana/plugins/marcusolsson-dynamictext-panel/) panel (`marcusolsson-dynamictext-panel`) | **6.2.0** | every status sheet. 6.2.0 is the newest release that supports Grafana 11.x; 6.2.3 and later need Grafana 12.3 |
 | [Infinity](https://grafana.com/grafana/plugins/yesoreyeram-infinity-datasource/) datasource (`yesoreyeram-infinity-datasource`) | **3.7.1** | only sheets that read a live JSON table (a repo registry, a work feed). 3.7.1 is the last release that loads on 11.3 |
 | [VictoriaMetrics](https://victoriametrics.com/) as the PromQL datasource | any current release | `sitrep.today()` puts a computed timestamp after `@` (`@ (time() - time() % 86400)`), which VictoriaMetrics accepts and Prometheus does not: Prometheus allows only a fixed timestamp, `start()` or `end()`. On Prometheus, rewrite `today()` before using it |
-| Python | 3, standard library only | `scripts/sitrep.py` and the generators |
-| [Playwright](https://playwright.dev/python/) with Chromium | any current release | only `scripts/render_check.py`: `pip install playwright && playwright install chromium` |
-| [Node.js](https://nodejs.org/) | any current release | only `scripts/sheet_harness.py`, which runs every sheet against live data before deploying |
+| Python | **3.9** or later, standard library only | `scripts/` and the generators (3.9 is the macOS system Python) |
+| [Playwright](https://playwright.dev/python/) with Chromium | any current release, optional | only `scripts/render_check.py`: `pip install playwright && playwright install chromium`. Without it, the page is checked by hand |
+| [Node.js](https://nodejs.org/) | any current release | only `scripts/sheet_harness.py`, which runs every sheet against live data, a fixture or no data before deploying |
 
 Pin both Grafana plugins in the install, for example in Docker Compose:
 

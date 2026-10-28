@@ -1,0 +1,17 @@
+{
+ "uid": "ai-usage",
+ "title": "AI tools usage",
+ "panels": [
+  {"id": 1, "type": "stat", "title": "Active users (14d)", "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+   "datasource": {"type": "prometheus", "uid": "vm"},
+   "targets": [{"refId": "A", "expr": "count(count by (login) (count_over_time(ai_tool_event[14d])))"}]},
+  {"id": 2, "type": "table", "title": "Events by kind", "gridPos": {"h": 8, "w": 10, "x": 6, "y": 0},
+   "datasource": {"type": "prometheus", "uid": "vm"},
+   "targets": [{"refId": "A", "expr": "sum by (kind) (count_over_time(ai_tool_event[14d]))", "instant": true}]},
+  {"id": 3, "type": "timeseries", "title": "Users per day", "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+   "datasource": {"type": "prometheus", "uid": "vm"},
+   "targets": [{"refId": "A", "expr": "count(count by (login) (count_over_time(ai_tool_event[1d])))"}]},
+  {"id": 4, "type": "text", "title": "How to read", "gridPos": {"h": 4, "w": 6, "x": 0, "y": 4},
+   "options": {"content": "kind=search: a question to company systems; kind=edit: a change drafted by the tool."}}
+ ]
+}

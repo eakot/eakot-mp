@@ -43,6 +43,9 @@ Work as that reader:
 - the threshold behind each WARN and ACT;
 - the ranking by cost, if you cannot read it from postmortems or history.
 
+A usage page brings its own typical rulings (one person under two logins, what counts as "active", an
+item idle on purpose, "current version" from content hashes): see the end of `reference/traps.md`.
+
 Everything else you decide, and the panel description records the decision. Do not ask "should I add
 links?" or "do you want a verdict line?". The answer is always yes, and it is in this file.
 
@@ -144,6 +147,20 @@ chart its own range (`timeFrom: "14d"`), so a short page default does not cut it
   category rule and ask whether the operator would recognise the split. A bucket stuck at 0 on day
   one means the rule is wrong.
 
+**Q: "Each sample is an event. How do I count them?"** (event telemetry: one sample of value 1 per
+call, `ai_skill_call{login="ann"} 1 <ts>`, not a gauge or a counter)
+**A:** Count samples, never `increase` or `rate` them. Four forms answer most questions:
+
+| Question | Query |
+|---|---|
+| events per bucket | `sum(count_over_time(x[$__interval]))` |
+| active days per entity, last 14 | `sum by (login) (count_over_time((count by (login) (count_over_time(x[1d])) > 0)[14d:1d]))` |
+| last seen, seconds ago | `time() - max by (login) (tlast_over_time(x[30d]))` (VictoriaMetrics) |
+| distinct entities per bucket | `count(count by (login) (count_over_time(x[$__interval])))` |
+
+No event in the window is no series at all, not a 0: the sheet's N/D path is the normal case for a quiet
+entity, so run the empty fixture (§3 step 5).
+
 **Q: "Which host is this about?"** (a templated page: one host, one repo, one service at a time)
 **A:** Keep the original's template variables, and filter every target by them. Each sheet names the
 entity it shows, from one identity query (`node_uname_info{instance="$node"}` → name, VM id, kernel),
@@ -190,6 +207,22 @@ grey is for what is secondary (ids, notes, sources). Colour means state, and onl
 readable. A column of zeros with truncated labels is a failure, even though every value in it is
 correct.
 
+**Q: "Someone outside the team reads this. What does it mean?"** (HR, management: "how many people use
+it, how often?")
+**A:** Write that sheet in the reader's words, not the operator's:
+
+- **No state tags.** Every line is `····` context (or `N/D`): ACT and WARN mean nothing to this reader.
+- **No verdict label.** `sheet(..., brief_label=None)` drops "SITREP"; the yellow rule still marks the line.
+- **No system names.** Say what was done ("questions to company systems instead of a manual search"), not
+  which system did it (MCP, skills, hooks).
+- **Whole words**, with the right plural: `${int(n)} ${plural(n, ['person', 'people'])}`, or in Russian
+  `plural(n, ['человек', 'человека', 'человек'])`. Never "15 чел.". Big numbers grouped: `int(n)`, in the
+  sheet's `locale`.
+- **The (i) explains every term** and says what cannot be counted. If team headcount is not in the
+  telemetry, there is no "% of the team", and the (i) says why.
+
+`examples/plain_overview_example.py` is one such sheet.
+
 **Q: "Why is it computed like that? What can't it see?"**
 **A:** The panel description (the ⓘ) carries four things:
 
@@ -205,10 +238,24 @@ invisible here"). An unnamed gap reads as green.
 
 1. **Inventory.** Export the dashboard JSON. For every panel, write down the operator question it
    answers, its query, and what it shows *now*. A panel with no question goes to the bottom, collapsed,
-   or away. A large community dashboard (Node Exporter Full: 14 rows, ~120 panels) keeps its deep rows
-   as the drill-down: the sheets replace only its top rows of tiles and basic charts, and
-   `carry_rows(src["panels"], y, drop=..., prefix="Drill-down · ")` carries the rest below them,
-   collapsed. Keep the original's uid, so links to it still work.
+   or away. Keep the original's uid, so links to it still work. Then pick one of two modes:
+   - **Keep.** The legacy panels stay as a drill-down below the sheets. A large community dashboard
+     (Node Exporter Full: 14 rows, ~120 panels) keeps its deep rows: the sheets replace only its top
+     rows of tiles and basic charts, and `carry_rows(src["panels"], y, drop=..., prefix="Drill-down · ")`
+     carries its collapsed rows below them. Panels of an *expanded* row go with
+     `carry_panels(src["panels"], ids, y, title)`: copied as-is into one collapsed row, packed, and
+     renumbered (`id_offset`, 1000 by default), so they cannot take a new sheet's id.
+   - **Full redraw.** No legacy panel survives, and every one is accounted for. Write the map first:
+     for each original panel, the question it answered and the new panel that answers it now. Keep it in
+     the generator as `sitrep.coverage(src["panels"], {old_id: new_id | "covered-by:<id>" |
+     "dropped:<reason>"}, new_panels, questions)`: it refuses an unmapped original, an unknown target and
+     a drop with no reason, and returns the coverage table for the hand-over. Then check **information
+     parity**: every metric, filter, `by (...)` dimension, window and statistic (avg, p50, p95, count)
+     of every original target is on some new panel. `sitrep.parity(src["panels"], new_panels)` lints the
+     metric names and `by (...)` labels; the windows and statistics you check by eye. The original's
+     "how to read" text panels move into the sheets and their (i). A legacy statistical quirk is kept and
+     labelled (`*`, the reason in the footer), not silently "fixed". `carry_panels()` is a fine first
+     step: carry as-is, then redraw panel by panel.
 2. **Answer as the operator.** Query every series live. Mark each defect:
    - an impossible value;
    - "No data";
@@ -228,20 +275,42 @@ invisible here"). An unnamed gap reads as green.
 5. **Generate, don't hand-edit.** Write a generator that reads the *original* JSON and writes the new
    one, using `scripts/sitrep.py` (`sheet`, `history`, `today`, `opened_closed`, `registry`, `finish`).
    `history` requires `interval`, the source's cadence; `finish(d, time_range=...)` sets the page default.
-   Start from `examples/refactor_example.py`. Keep the generator, the original and the assets together,
-   so the next change is a rerun. Write the JSON in the file's own format (indent, `ensure_ascii`): the diff then
-   shows the change, not a reformat. `finish()` refuses overlapping or over-wide panels.
+   Start from `examples/refactor_example.py` (keep mode) or `examples/plain_overview_example.py` (full
+   redraw). Keep the generator, the original and the assets together, so the next change is a rerun.
+   Write the JSON in the file's own format (indent, `ensure_ascii`): the diff then shows the change, not a
+   reformat. `finish()` refuses overlapping or over-wide panels and duplicate ids, inside collapsed rows
+   too. Pass generator data to a sheet with `consts={"TN": names}`, never by `%`-formatting or f-stringing
+   the JS (a JS `%` or `{` breaks it).
 
-   **Then dry-run every sheet before you deploy:**
-   `scripts/sheet_harness.py out.json <prom-url> --var node=... --var job=...`. It runs each sheet's
-   queries against live data, runs the sheet's helper code in `node`, and prints the sheet as text,
-   SITREP line first. It fails on a helper that throws, on `undefined` or `NaN` text, and on a sheet
-   with no SITREP. Run it once per entity (step 2 of the "Which host?" answer) and once with a value
-   that matches nothing. A deploy-and-screenshot round trip takes minutes; this takes seconds, and it is
-   where most classification mistakes show up.
-6. **Render and check.** Run `scripts/render_check.py <url> shot.png`. It reads the token from
-   `GRAFANA_TOKEN`, or from the file `GRAFANA_TOKEN_FILE` names, such as the one mcp-grafana already
-   keeps, so the token never passes through argv. It scrolls the page, because Grafana renders a panel
+   **Then dry-run every sheet before you deploy:** `scripts/sheet_harness.py out.json <source>`. It runs
+   each sheet's queries, runs the sheet's helper code in `node`, and prints the sheet as text, verdict line
+   first. It fails on a query the datasource rejects, a helper that throws, `undefined` or `NaN` text, and
+   a sheet with no verdict line. Sheets in collapsed rows run too, and with a live source every history
+   chart's targets run once as a range query (a `duplicate output timeseries` 422 shows only there). The
+   source is one of:
+   - `<prom-url>`, the datasource's own URL, when you can reach it;
+   - `--grafana <url>`, through Grafana's datasource proxy, when only Grafana can reach the datasource
+     (an in-cluster URL). It needs a Grafana service-account token (step 6);
+   - `--fixture file.json`, `{refId: [[labels, value], ...]}`, filled from whatever query tool you have
+     (an MCP server's one-expression-at-a-time query is enough). Keep the hostile inputs in one:
+     `constructor#5`, an apostrophe, `<b>`. A sheet or refId the fixture does not name fails the run;
+     no data is an explicit `[]`;
+   - `--empty`, **mandatory**: every target answers nothing. Every number must read N/D: a line
+     tagged OK fails the run, and so does a number that shows only when there is no data ("0 people"
+     on an untagged sheet; static text such as "30 days" is told apart by a second run with data). It catches the sheets that say "0 · OK" with no data.
+
+   Add `--var node=...` per entity (step 2 of the "Which host?" answer), and run once with a value that
+   matches nothing. A deploy-and-screenshot round trip takes minutes; this takes seconds, and it is where
+   most classification mistakes show up.
+6. **Deploy, render and check.** Deploy with `scripts/deploy.py out.json <grafana-url> [--folder <uid>]`:
+   the file goes straight to `/api/dashboards/db`, so its size does not matter (a dozen sheets is over
+   100 KB, too large to pass reliably as a tool-call argument) and the token never passes through you.
+   Every script reads the token from `GRAFANA_TOKEN`, or from the file `GRAFANA_TOKEN_FILE` names, never
+   from argv. It must be a **Grafana service-account token** (`glsa_…`): a gateway's token, such as the
+   one an MCP server in front of Grafana takes, gets 401 "Invalid API key", and the scripts check this
+   first and say so. With no token at all, hand the operator the file to import in the UI.
+
+   Then run `scripts/render_check.py <url> shot.png`. It scrolls the page, because Grafana renders a panel
    only once it is in view. Put a templated page's variables in the URL (`&var-node=...`). It checks for:
    - zero sheets;
    - same-tab links;
@@ -250,13 +319,17 @@ invisible here"). An unnamed gap reads as green.
    - "No data" panels;
    - page errors.
 
-   Then run the dashboard validator, if the repo has one.
+   Playwright is optional. Without it, open the page and check the same list by hand, the browser
+   console included. Then run the dashboard validator, if the repo has one.
 7. **Walk-through, in the operator's chair.** Open the screenshot. Ask every §2 question of every
    sheet, and answer each in one sentence from the image alone. A question that takes more than a glance
    to answer is a defect: go back to step 2. Then try to break it, or hand it to a fresh-context
    reviewer. Feed in `constructor#5`, an apostrophe, an empty registry and a missing frame.
 8. **Hand over.** In the change description, give the before and after of every defect from step 2,
-   and every ruling with its source.
+   and every ruling with its source. For a full redraw, add the coverage table (old title → question →
+   new panel), and name every place where the redraw is *more* precise than the original (a server-side
+   histogram quantile in place of a worst-series approximation, say): a number that moved is otherwise
+   read as a bug.
 
 ## 4. Writing a sheet
 
@@ -266,13 +339,16 @@ invisible here"). An unnamed gap reads as green.
 |---|---|
 | Data | `rows(ref)` → `[{labels, value}]`; `one(ref)`; `table(ref)` for Infinity or SQL frames |
 | Links | `repoA`, `prA`, `commitA`, `fileA`, `wfA`, `refA`, `linkify(text, repo)` |
-| Values | `dur` (inline), `durCol` (a fixed-width column), `pct`, `num`, `usd`; `lvl(x, [[0,'ok'],[2,'warn'],[6,'bad']])`; `worst(states)` |
-| Layout | `page(no, title, body)`, `brief`, `sub`, `ln(label, value, state, note)`, `item(text, state, wrap, tip)` (`tip` = hover text), `fx(w, html)` (a fixed-width column of `w` ch), `foot`, `raw(text)` for a file shown as written |
+| Values | `dur` (inline), `durCol` (a fixed-width column), `pct`, `num`, `usd`, `int` (grouped digits, the sheet's `locale`), `plural(n, forms)` (`[one, other]` or `[one, few, many]`); `lvl(x, [[0,'ok'],[2,'warn'],[6,'bad']])`; `worst(states)` |
+| Layout | `page(no, title, body)`, `brief` (its label: `sheet(brief_label=...)` or `sitrep.BRIEF_LABEL`, `None` for none), `sub`, `ln(label, value, state, note)`, `item(text, state, wrap, tip)` (`tip` = hover text), `fx(w, html)` (a fixed-width column of `w` ch), `fxr(w, n)` (the same, right-aligned, for a number), `foot`, `raw(text)` for a file shown as written |
+| Tables | `cols([[w, 'title', 'r'], ...])` → `{hdr, row(values)}`: the header line and every row share one width spec; `w = 0` is free text |
 | Graphs | `flow(rows, edges, {w, lines})`: rows of rectangles, text inside, state under; edges drawn after render. Fill the box: `<div class="w2">` wraps a task or verdict over two lines, the whole of it in `tip` |
 | Columns | `<div class="cols">…</div>` |
 
 Rules:
 
+- **The library's names are taken.** The body shares the library's scope, so `sheet()` refuses a
+  top-level `const plural = ...` (or a `consts` key) that redeclares one: use the library's helper.
 - **Escape everything from data.** Use `esc()`, or `linkify()`, which escapes first. Never interpolate
   a label raw.
 - **Write the verdict last.** Compute it from the same values the lines show, so the two cannot
@@ -292,10 +368,14 @@ Rules:
 |---|---|
 | `assets/briefing_lib.js` | The renderer, embedded into every sheet. Change it here, then regenerate. |
 | `assets/briefing.css` | The style: flat background, monospace, state colours. |
-| `scripts/sitrep.py` | Panel builders (`sheet`, `history`, `opened_closed`, `carry_rows`), plus `today()` and the layout checks. |
+| `scripts/sitrep.py` | Panel builders (`sheet`, `history`, `opened_closed`, `carry_rows`, `carry_panels`), `today()`, the layout checks, and the full-redraw record (`coverage`, `parity`). |
+| `scripts/sheet_harness.py` | Runs every sheet in `node` against live data, Grafana's proxy, a fixture or nothing, and prints it as text, before deploying (step 5). |
+| `scripts/deploy.py` | Posts the generated file to Grafana (step 6). |
 | `scripts/render_check.py` | The headless render plus the checks from step 6. |
-| `scripts/sheet_harness.py` | Runs every sheet against live data in `node` and prints it as text, before deploying (step 5). |
-| `examples/refactor_example.py` | A deploy page refactored end to end. |
+| `scripts/grafana_api.py` | The token reader and preflight the three scripts share. |
+| `examples/refactor_example.py` | A deploy page refactored end to end (keep mode). |
+| `examples/plain_overview_example.py` | A plain-language sheet over event telemetry, as a full redraw with its coverage map; its original and fixture beside it. |
+| `tests/test_sitrep.py` | Regression tests: `python3 -m unittest discover -s tests`. |
 | `reference/traps.md` | Every defect the first page shipped with, its cause, and the fix in these files. |
 
 ## 6. Requirements
@@ -306,8 +386,8 @@ Rules:
 | [Business Text](https://grafana.com/grafana/plugins/marcusolsson-dynamictext-panel/) panel (`marcusolsson-dynamictext-panel`) | **6.2.0** | every status sheet. 6.2.0 is the newest release that supports Grafana 11.x; 6.2.3 and later need Grafana 12.3 |
 | [Infinity](https://grafana.com/grafana/plugins/yesoreyeram-infinity-datasource/) datasource (`yesoreyeram-infinity-datasource`) | **3.7.1** | only sheets that read a live JSON table (a repo registry, a work feed). 3.7.1 is the last release that loads on 11.3 |
 | [VictoriaMetrics](https://victoriametrics.com/) as the PromQL datasource | any current release | `sitrep.today()` puts a computed timestamp after `@` (`@ (time() - time() % 86400)`), which VictoriaMetrics accepts and Prometheus does not: Prometheus allows only a fixed timestamp, `start()` or `end()`. On Prometheus, rewrite `today()` before using it |
-| Python | 3, standard library only | `scripts/sitrep.py` and the generators |
-| [Playwright](https://playwright.dev/python/) with Chromium | any current release | only `scripts/render_check.py`: `pip install playwright && playwright install chromium` |
+| Python | **3.9** or later, standard library only | `scripts/` and the generators. 3.9 is the macOS system Python, so a generator must run there too: no backslash inside an f-string's `{}`, no reused quote inside one, no `match` |
+| [Playwright](https://playwright.dev/python/) with Chromium | any current release, optional | only `scripts/render_check.py`: `pip install playwright && playwright install chromium`. Without it, check the page by hand (step 6) |
 | [Node.js](https://nodejs.org/) | any current release | only `scripts/sheet_harness.py`, which runs the sheets' helper code outside Grafana |
 
 Pin both Grafana plugins in the install, for example in Docker Compose:
