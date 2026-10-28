@@ -11,6 +11,21 @@ import urllib.error
 import urllib.request
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    # urllib would carry the Authorization header to wherever a redirect points: refuse instead
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, f"redirected to {newurl}: refused, the token would follow. "
+                                     "Give the final URL (https, the right host)", headers, fp)
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
+def urlopen(req, timeout=60):
+    """urllib.request.urlopen that never follows a redirect: every request here carries the token."""
+    return _OPENER.open(req, timeout=timeout)
+
+
 def token():
     t = os.environ.get("GRAFANA_TOKEN")
     if not t and os.environ.get("GRAFANA_TOKEN_FILE"):
@@ -33,7 +48,7 @@ def call(base, path, tok, body=None, timeout=60):
         req.add_header("Content-Type", "application/json")
     if tok:
         req.add_header("Authorization", f"Bearer {tok}")
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urlopen(req, timeout=timeout) as r:
         return json.load(r)
 
 
@@ -52,6 +67,6 @@ def preflight(base, tok):
                 + ("Check that it is not expired or revoked, and its role." if tok.startswith("glsa_") else
                    "A token for a gateway in front of Grafana (an MCP server's, say) does not work here: create a "
                    "service account in Grafana (Administration > Service accounts) and pass its token."))
-        raise SystemExit(f"Grafana at {base}: HTTP {e.code} on the preflight")
+        raise SystemExit(f"Grafana at {base}: HTTP {e.code} on the preflight ({e.msg})")
     except urllib.error.URLError as e:
         raise SystemExit(f"Grafana at {base} is unreachable: {e.reason}")

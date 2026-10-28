@@ -293,7 +293,8 @@ invisible here"). An unnamed gap reads as green.
      (an in-cluster URL). It needs a Grafana service-account token (step 6);
    - `--fixture file.json`, `{refId: [[labels, value], ...]}`, filled from whatever query tool you have
      (an MCP server's one-expression-at-a-time query is enough). Keep the hostile inputs in one:
-     `constructor#5`, an apostrophe, `<b>`;
+     `constructor#5`, an apostrophe, `<b>`. A sheet or refId the fixture does not name fails the run;
+     no data is an explicit `[]`;
    - `--empty`, **mandatory**: every target answers nothing. Every number must read N/D, and a line
      tagged OK fails the run. It catches the sheets that say "0 · OK" with no data.
 
@@ -345,6 +346,8 @@ invisible here"). An unnamed gap reads as green.
 
 Rules:
 
+- **The library's names are taken.** The body shares the library's scope, so `sheet()` refuses a
+  top-level `const plural = ...` (or a `consts` key) that redeclares one: use the library's helper.
 - **Escape everything from data.** Use `esc()`, or `linkify()`, which escapes first. Never interpolate
   a label raw.
 - **Write the verdict last.** Compute it from the same values the lines show, so the two cannot

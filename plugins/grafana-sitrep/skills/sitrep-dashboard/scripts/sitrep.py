@@ -13,6 +13,7 @@ Needs the Business Text panel plugin (marcusolsson-dynamictext-panel; 6.2.0 is t
 import copy
 import json
 import re
+import textwrap
 from pathlib import Path
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
@@ -29,7 +30,10 @@ def _minify_css(src):
     return "\n".join(x.strip() for x in re.sub(r"/\*.*?\*/", "", src, flags=re.S).splitlines() if x.strip())
 
 
-LIB = _minify_js((ASSETS / "briefing_lib.js").read_text())
+_LIB_SRC = (ASSETS / "briefing_lib.js").read_text()
+# The library's top-level names: a sheet's body or consts declaring one again is a SyntaxError at render time.
+LIB_NAMES = frozenset(re.findall(r"^(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)", _LIB_SRC, re.M)) | {"context", "html"}
+LIB = _minify_js(_LIB_SRC)
 CSS = _minify_css((ASSETS / "briefing.css").read_text())
 # The verdict line's label on every sheet; None drops it (the yellow rule still marks the line). One sheet can
 # differ: sheet(..., brief_label=...).
@@ -141,9 +145,17 @@ def sheet(pid, title, desc, grid, targets, body_js, *, ds, repos=None, forge="ht
     if registry_target and any(f in body_js for f in LINK_HELPERS):
         targets = targets + [registry_target]
     head = ""
+    # the library and the body share one scope: a name declared in both breaks the sheet only when it renders
+    clash = set(re.findall(r"^(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)", textwrap.dedent(body_js), re.M))
+    clash = (clash - {"html"}) & LIB_NAMES
+    if clash:
+        raise SystemExit(f"sheet {pid}: body_js declares {sorted(clash)}, which the library already defines "
+                         "(see SKILL.md §4): use the library's, or rename yours")
     for k, v in (consts or {}).items():
         if not re.fullmatch(r"[A-Za-z_$][\w$]*", k):
             raise SystemExit(f"sheet {pid}: const name {k!r} is not a JS identifier")
+        if k in LIB_NAMES:
+            raise SystemExit(f"sheet {pid}: const name {k!r} is taken by the library")
         head += f"const {k} = {json.dumps(v, ensure_ascii=False)};\n"
     js = lib + "\n// ---- this sheet ----\n" + head + body_js.strip() + f"\nHB.registerHelper('{helper}', () => new HB.SafeString(html));\n"
     uids = {json.dumps(t["datasource"], sort_keys=True) for t in targets}
@@ -270,8 +282,10 @@ def coverage(src_panels, mapping, new_panels=None, questions=None):
                 errs.append(f"panel {p['id']}: a drop needs its reason")
             home = f"dropped: {to[8:].strip()}"
         else:
-            nid = int(to[11:]) if isinstance(to, str) and to.startswith("covered-by:") else to
-            if not isinstance(nid, int):
+            nid = to
+            if isinstance(to, str) and to.startswith("covered-by:"):
+                nid = int(to[11:]) if to[11:].strip().isdigit() else None
+            if not isinstance(nid, int) or isinstance(nid, bool):
                 errs.append(f"panel {p['id']}: {to!r} is not a new id, covered-by:<id> or dropped:<reason>")
                 continue
             if new_panels is not None and nid not in new:

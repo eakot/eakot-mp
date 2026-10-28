@@ -106,6 +106,11 @@ class Coverage(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "does not have"):
             sitrep.coverage(self.SRC, {1: 10, 2: "covered-by:11"}, [{"id": 10, "title": "n"}])
 
+    def test_malformed_targets_are_refused_not_crashed(self):
+        for bad in ("covered-by:abc", "covered-by:", True):
+            with self.assertRaisesRegex(SystemExit, "is not a new id"):
+                sitrep.coverage(self.SRC, {1: bad, 2: 10})
+
     def test_table(self):
         t = sitrep.coverage(self.SRC, {1: 10, 2: "dropped:no reader"}, [{"id": 10, "title": "new"}], {1: "why?"})
         self.assertIn("| 1 | a | why? | 10 new |", t)
@@ -125,6 +130,14 @@ class Sheet(unittest.TestCase):
         self.assertIn('const TN = {"a": "100 % {x}"};', s["options"]["helpers"])
         with self.assertRaises(SystemExit):
             mini_sheet(1, 0, consts={"not-js": 1})
+
+    def test_redeclaring_a_library_name_is_refused(self):
+        with self.assertRaisesRegex(SystemExit, "plural"):
+            mini_sheet(1, 0, "const plural = (n) => 'x';\nconst html = page('01', 'T', brief('a'));")
+        with self.assertRaisesRegex(SystemExit, "taken by the library"):
+            mini_sheet(1, 0, consts={"int": 1})
+        # an inner scope may shadow freely
+        mini_sheet(1, 0, "const f = () => { const a = 1; return a; };\nconst html = page('01', 'T', brief(String(f())));")
 
     def test_minified_lib_renders_the_same(self):
         full = (SKILL / "assets" / "briefing_lib.js").read_text()
@@ -175,9 +188,18 @@ class Harness(unittest.TestCase):
 
     def test_per_panel_fixture(self):
         d = {"panels": [mini_sheet(1, 0), mini_sheet(2, 4)]}
-        r = harness(d, "--fixture", fixture({"1": {"A": [[{}, 5]]}, "2": {}}))
+        r = harness(d, "--fixture", fixture({"1": {"A": [[{}, 5]]}, "2": {"A": []}}))
+        self.assertEqual(r.returncode, 0, r.stdout)
         self.assertIn("v 5", r.stdout)
         self.assertIn("none", r.stdout)
+
+    def test_fixture_gap_fails(self):
+        d = {"panels": [mini_sheet(1, 0), mini_sheet(2, 4)]}
+        r = harness(d, "--fixture", fixture({"1": {"A": [[{}, 5]]}}))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("panel 2 is not in the fixture", r.stdout)
+        r = harness(d, "--fixture", fixture({"B": []}))
+        self.assertIn("refId A is not in the fixture", r.stdout)
 
 
 class FakeGrafana(http.server.BaseHTTPRequestHandler):
@@ -197,6 +219,11 @@ class FakeGrafana(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         FakeGrafana.seen.append(("GET", self.path, self.headers.get("Authorization")))
+        if self.path.startswith("/hop"):
+            self.send_response(302)
+            self.send_header("Location", "http://evil.invalid/api/search")
+            self.end_headers()
+            return
         if self.headers.get("Authorization") != "Bearer glsa_good":
             return self.reply(401, {"message": "Invalid API key"})
         if self.path.startswith("/api/search"):
@@ -235,7 +262,11 @@ class Live(unittest.TestCase):
     def dash(self):
         chart = sitrep.history(2, "chart", "", {"h": 4, "w": 16, "x": 8, "y": 0},
                                [sitrep.q("A", 'label_replace(up, "a", "$1", "b", "(.*)")', VM, instant=False)], interval="5m")
-        return {"uid": "u", "panels": [mini_sheet(1, 0), chart]}
+        loki = {"id": 3, "type": "logs", "title": "logs", "gridPos": {"h": 4, "w": 8, "x": 0, "y": 4},
+                "datasource": {"type": "loki", "uid": "lk"}, "targets": [{"refId": "A", "expr": '{job="x"} |= "err"'}]}
+        templ = sitrep.history(4, "templated", "", {"h": 4, "w": 16, "x": 8, "y": 4},
+                               [sitrep.q("A", 'up{job="$job"}', VM, instant=False)], interval="5m")
+        return {"uid": "u", "panels": [mini_sheet(1, 0), chart, loki, templ]}
 
     def test_grafana_proxy_and_range_failure(self):
         FakeGrafana.seen = []
@@ -247,6 +278,16 @@ class Live(unittest.TestCase):
         self.assertIn("duplicate output timeseries", r.stdout)
         self.assertEqual(r.returncode, 1)
         self.assertTrue(any(p.startswith("/api/datasources/proxy/uid/vm/api/v1/query?") for _, p, _ in FakeGrafana.seen))
+        # the Loki panel and the target with an unset $job are not sent to the PromQL API
+        self.assertIn("1 failure(s)", r.stdout)
+        self.assertFalse(any("lk" in p or "job" in p for _, p, _ in FakeGrafana.seen if isinstance(p, str)))
+
+    def test_redirect_is_not_followed_with_the_token(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump(self.dash(), f)
+        r = self.run_env([sys.executable, str(SKILL / "scripts" / "deploy.py"), f.name, self.url + "/hop"], "glsa_good")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("refused, the token would follow", r.stderr)
 
     def test_wrong_token_is_named(self):
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:

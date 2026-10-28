@@ -93,7 +93,7 @@ class Live:
         if self.tok:
             req.add_header("Authorization", f"Bearer {self.tok}")
         try:
-            with urllib.request.urlopen(req, timeout=60) as r:
+            with grafana_api.urlopen(req) as r:
                 d = json.load(r)
         except urllib.error.HTTPError as e:  # a 422 carries the datasource's reason in its body
             try:
@@ -116,15 +116,24 @@ class Live:
 
 
 class Fixture:
-    """Canned answers: {refId: [[labels, value], ...]} for every sheet, or {"<panel id>": {...}} per sheet."""
+    """Canned answers: {refId: [[labels, value], ...]} for every sheet, or {"<panel id>": {...}} per sheet.
+    A sheet or refId the fixture does not name fails: a typo must not pass as a quiet run. No data is `[]`."""
 
-    def __init__(self, data):
-        self.data = data
+    def __init__(self, data, empty=False):
+        self.data, self.empty = data, empty
         self.per_panel = bool(data) and all(re.fullmatch(r"\d+", k) for k in data)
 
     def instant(self, panel, target):
-        refs = self.data.get(str(panel["id"]), {}) if self.per_panel else self.data
-        return [(dict(lb), float(v)) for lb, v in refs.get(target["refId"], [])]
+        if self.empty:
+            return []
+        refs = self.data
+        if self.per_panel:
+            if str(panel["id"]) not in self.data:
+                raise KeyError(f"panel {panel['id']} is not in the fixture")
+            refs = self.data[str(panel["id"])]
+        if target["refId"] not in refs:
+            raise KeyError(f"refId {target['refId']} is not in the fixture (give [] for no data)")
+        return [(dict(lb), float(v)) for lb, v in refs[target["refId"]]]
 
 
 def text(markup):
@@ -174,11 +183,23 @@ def run_sheet(p, src, empty):
     return fails
 
 
+def promql(p, t):
+    """Whether a target is PromQL: its datasource type, or the panel's, names Prometheus or VictoriaMetrics.
+    A carried Loki or SQL panel also has an `expr`, and the PromQL API would reject it."""
+    ds = t.get("datasource") if isinstance(t.get("datasource"), dict) and t["datasource"].get("type") else p.get("datasource")
+    kind = (ds or {}).get("type", "") if isinstance(ds, dict) else ""
+    return "expr" in t and ("prometheus" in kind or "victoria" in kind)
+
+
 def run_history(p, src):
-    """Run a chart's targets once as range queries; return its failure count."""
+    """Run a chart's PromQL targets once as range queries; return its failure count."""
     fails, got = 0, []
     for t in p.get("targets", []):
-        if "expr" not in t:
+        if not promql(p, t):
+            continue
+        left = re.findall(r"\$\{?(?!__)[A-Za-z_]\w*", subst(t["expr"], src.vars))  # not $1 of label_replace
+        if left:
+            print(f"  ([{p['id']}] target {t['refId']} skipped: {sorted(set(left))} not given with --var)", file=sys.stderr)
             continue
         try:
             got.append(f"{t['refId']} {len(src.range(p, t))} series")
@@ -204,7 +225,7 @@ def main():
         ap.error("give exactly one source: a Prometheus URL, --grafana, --fixture or --empty")
     vars_ = dict(v.split("=", 1) for v in a.var)
     if a.fixture or a.empty:
-        src = Fixture(json.loads(Path(a.fixture).read_text()) if a.fixture else {})
+        src = Fixture(json.loads(Path(a.fixture).read_text()) if a.fixture else {}, empty=a.empty)
     else:
         src = Live(a.prom_url, a.grafana, vars_)
     d = json.loads(Path(a.dashboard).read_text())
@@ -213,7 +234,7 @@ def main():
     fails = sum(run_sheet(p, src, a.empty) for p in sheets)
     charts = []
     if isinstance(src, Live):
-        charts = [p for p in panels if p.get("type") not in (SHEET, "row") and any("expr" in t for t in p.get("targets", []))]
+        charts = [p for p in panels if p.get("type") not in (SHEET, "row") and any(promql(p, t) for t in p.get("targets", []))]
         fails += sum(run_history(p, src) for p in charts)
     print(f"{len(sheets)} sheet(s), {len(charts)} chart(s), {fails} failure(s)")
     return 1 if fails else 0
