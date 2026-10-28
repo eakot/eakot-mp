@@ -149,6 +149,18 @@ class Sheet(unittest.TestCase):
         self.assertIn("a &amp; &lt;b&gt;</div>", out)
         self.assertNotIn("&amp;amp;", out)
 
+    def test_helpers_edge_values(self):
+        s = mini_sheet(1, 0, "const T = cols([[6, 'a'], [4, 'n', 'r'], [0, 'b']]); const html = page('01', 'T', brief(int(-0.4)) + T.row([undefined, null, null]));")
+        js = sheet_harness.SHIM % "[]" + s["options"]["helpers"] + "\nprocess.stdout.write(String(OUT));\n"
+        out = subprocess.run(["node", "-e", js], capture_output=True, text=True, check=True).stdout
+        self.assertNotIn("undefined", out)
+        self.assertNotIn("-0", out)
+        self.assertEqual(out.count("—"), 3)
+
+    def test_const_also_declared_in_body_is_refused(self):
+        with self.assertRaisesRegex(SystemExit, "keep one"):
+            mini_sheet(1, 0, "const TN = 2;\nconst html = page('01', 'T', brief('x'));", consts={"TN": 1})
+
     def test_redeclaring_a_library_name_is_refused(self):
         with self.assertRaisesRegex(SystemExit, "plural"):
             mini_sheet(1, 0, "const plural = (n) => 'x';\nconst html = page('01', 'T', brief('a'));")
@@ -222,6 +234,12 @@ class Harness(unittest.TestCase):
         r = harness({"panels": [plain]}, "--empty")
         self.assertEqual(r.returncode, 1)
         self.assertIn("a number on no data", r.stdout)
+
+    def test_empty_run_allows_static_numbers(self):
+        ok = mini_sheet(1, 0, "const v = one('A'); const html = page('01', 'T', brief('x') + ln('retention', '30 days', 'idle')"
+                              " + ln('people', v == null ? '—' : `${int(v)} people`, v == null ? 'nd' : 'idle'));")
+        r = harness({"panels": [ok]}, "--empty")
+        self.assertEqual(r.returncode, 0, r.stdout)
 
     def test_builtins_are_substituted(self):
         e = sheet_harness.subst("x[$__range_s] @ ${__to} $__from $__interval_ms $job", {"job": "j"})

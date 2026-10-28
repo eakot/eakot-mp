@@ -74,7 +74,7 @@ const num = (x, d) => (x == null ? '—' : Number(x).toFixed(d || 0));
 const usd = (x) => (x == null ? '—' : x >= 100 ? `$${Math.round(x).toLocaleString('en-US')}` : `$${x.toFixed(2)}`);
 // A whole number with the sheet's digit grouping (sheet(locale=...)): 12 345 in ru-RU, 12,345 in en-US.
 const LOCALE = /*LOCALE*/'en-US';
-const int = (x) => (x == null ? '—' : Math.round(x).toLocaleString(LOCALE));
+const int = (x) => (x == null ? '—' : (Math.round(x) || 0).toLocaleString(LOCALE)); // || 0: never "-0"
 // The word that goes with n, in the sheet's language: forms = [one, other] (English) or [one, few, many] (Russian
 // and the other Slavic languages): `${int(n)} ${plural(n, ['человек', 'человека', 'человек'])}`.
 const plural = (n, forms) => {
@@ -109,7 +109,7 @@ const fxr = (w, v) => `<span class="fx fxr" style="min-width:${w}ch">${esc((v ==
 //   T.hdr + rows.map((r) => item(T.row([int(r.calls), esc(r.tool), linkify(r.err)]), r.state)).join('')
 // Left-aligned cells are HTML, escaped by the caller, as with fx(); right-aligned ('r') cells are text, as with fxr().
 const cols = (spec) => {
-  const cell = ([w, , al], v, i) => (al === 'r' ? (w ? fxr(w, v) : esc(v)) : w ? fx(w, v) : v == null ? '' : String(v)) + (i < spec.length - 1 ? ' ' : '');
+  const cell = ([w, , al], v, i) => (v == null ? (w ? (al === 'r' ? fxr(w, null) : fx(w, '—')) : '—') : al === 'r' ? (w ? fxr(w, v) : esc(v)) : w ? fx(w, v) : String(v)) + (i < spec.length - 1 ? ' ' : '');
   return {
     // a title is text: an 'r' cell escapes its own (any width), the others take html, so escape it here for those only
     hdr: `<div class="it ch">${spec.map((c, i) => cell(c, c[2] === 'r' ? c[1] : esc(c[1]), i)).join('')}</div>`,

@@ -170,6 +170,20 @@ def text(markup):
     return "\n".join(x for x in html.unescape(t).splitlines() if x.strip())
 
 
+PROBE = 987654.0
+
+
+def render(p, series):
+    js = SHIM % json.dumps(series) + p["options"]["helpers"] + "\nprocess.stdout.write(String(OUT));\n"
+    return subprocess.run(["node", "-e", js], capture_output=True, text=True)
+
+
+def values(markup):
+    """The value of every contents line and every right-aligned cell, as text."""
+    return [html.unescape(re.sub(r"<[^>]*>", "", v)) for v in re.findall(
+        r'<span class="(?:v|fx fxr)"[^>]*>(.*?)</span>', markup)]
+
+
 def run_sheet(p, src, empty):
     """Print one sheet; return its failure count."""
     fails, series = 0, []
@@ -186,8 +200,7 @@ def run_sheet(p, src, empty):
         for labels, value in res:
             labels = {k: v for k, v in labels.items() if k != "__name__"}
             series.append({"refId": t["refId"], "fields": [{"type": "number", "labels": labels, "values": [value]}]})
-    js = SHIM % json.dumps(series) + p["options"]["helpers"] + "\nprocess.stdout.write(String(OUT));\n"
-    r = subprocess.run(["node", "-e", js], capture_output=True, text=True)
+    r = render(p, series)
     print(f"── [{p['id']}] {p['title']}")
     if r.returncode:
         print("FAIL helper threw:", r.stderr.strip().splitlines()[-1] if r.stderr.strip() else r.returncode)
@@ -205,10 +218,13 @@ def run_sheet(p, src, empty):
         if ok:
             print(f"FAIL OK on no data, must read N/D: {ok[:3]}\n")
             fails += 1
-        # a sheet with no tags (a plain-language one) shows a made-up number only in its values: none may hold a digit
-        vals = [html.unescape(re.sub(r"<[^>]*>", "", v)) for v in re.findall(
-            r'<span class="(?:v|fx fxr)"[^>]*>(.*?)</span>', r.stdout)]
-        made = [v for v in vals if re.search(r"\d", v)]
+        # A sheet with no tags (a plain-language one) shows a made-up number only in its values. A value with a digit
+        # that also shows when every target answers PROBE is static text ("30 days"); one that shows only on no data
+        # was invented for it ("0 people").
+        probe = [{"refId": t["refId"], "fields": [{"type": "number", "labels": {}, "values": [PROBE]}]}
+                 for t in p.get("targets", []) if "expr" in t]
+        static = set(values(render(p, probe).stdout))
+        made = [v for v in values(r.stdout) if re.search(r"\d", v) and v not in static]
         if made:
             print(f"FAIL a number on no data, must read —: {made[:3]}\n")
             fails += 1

@@ -153,6 +153,9 @@ def sheet(pid, title, desc, grid, targets, body_js, *, ds, repos=None, forge="ht
     if clash:
         raise SystemExit(f"sheet {pid}: body_js declares {sorted(clash)}, which the library already defines "
                          "(see SKILL.md §4): use the library's, or rename yours")
+    twice = set(consts or {}) & set(re.findall(r"^(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)", textwrap.dedent(body_js), re.M))
+    if twice:
+        raise SystemExit(f"sheet {pid}: {sorted(twice)} is passed in consts and declared in body_js: keep one")
     for k, v in (consts or {}).items():
         if not re.fullmatch(r"[A-Za-z_$][\w$]*", k):
             raise SystemExit(f"sheet {pid}: const name {k!r} is not a JS identifier")

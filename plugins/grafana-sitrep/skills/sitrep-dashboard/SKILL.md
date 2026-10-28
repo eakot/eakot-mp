@@ -295,8 +295,9 @@ invisible here"). An unnamed gap reads as green.
      (an MCP server's one-expression-at-a-time query is enough). Keep the hostile inputs in one:
      `constructor#5`, an apostrophe, `<b>`. A sheet or refId the fixture does not name fails the run;
      no data is an explicit `[]`;
-   - `--empty`, **mandatory**: every target answers nothing. Every number must read N/D, and a line
-     tagged OK fails the run. It catches the sheets that say "0 · OK" with no data.
+   - `--empty`, **mandatory**: every target answers nothing. Every number must read N/D: a line
+     tagged OK fails the run, and so does a number that shows only when there is no data ("0 people"
+     on an untagged sheet; static text such as "30 days" is told apart by a second run with data). It catches the sheets that say "0 · OK" with no data.
 
    Add `--var node=...` per entity (step 2 of the "Which host?" answer), and run once with a value that
    matches nothing. A deploy-and-screenshot round trip takes minutes; this takes seconds, and it is where
