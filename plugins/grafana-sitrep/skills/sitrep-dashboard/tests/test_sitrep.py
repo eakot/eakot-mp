@@ -139,6 +139,19 @@ class Sheet(unittest.TestCase):
         # an inner scope may shadow freely
         mini_sheet(1, 0, "const f = () => { const a = 1; return a; };\nconst html = page('01', 'T', brief(String(f())));")
 
+    def test_locale_is_checked_at_generation(self):
+        for bad in ("ru_RU", None, ""):
+            with self.assertRaisesRegex(SystemExit, "BCP 47"):
+                mini_sheet(1, 0, locale=bad)
+        mini_sheet(1, 0, locale="ru-RU")
+
+    def test_fxr_escapes_and_pads(self):
+        s = mini_sheet(1, 0, "const html = page('01', 'T', brief(fxr(6, '<b>') + '|' + fxr(4, 7)));")
+        js = sheet_harness.SHIM % "[]" + s["options"]["helpers"] + "\nprocess.stdout.write(String(OUT));\n"
+        out = subprocess.run(["node", "-e", js], capture_output=True, text=True, check=True).stdout
+        self.assertIn("\u2007\u2007&lt;b&gt;</span>", out)
+        self.assertIn(">\u2007\u2007\u20077</span>", out)
+
     def test_minified_lib_renders_the_same(self):
         full = (SKILL / "assets" / "briefing_lib.js").read_text()
         body = ("const T = cols([[4, 'n', 'r'], [0, 'x']]);\n"
@@ -185,6 +198,17 @@ class Harness(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("OK on no data", r.stdout)
         self.assertEqual(harness({"panels": [mini_sheet(1, 0)]}, "--empty").returncode, 0)
+
+    def test_empty_run_fails_a_number_on_an_untagged_sheet(self):
+        plain = mini_sheet(1, 0, "const n = one('A') || 0; const html = page('01', 'T', brief('x') + ln('people', `${int(n)} people`, 'idle'));")
+        r = harness({"panels": [plain]}, "--empty")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("a number on no data", r.stdout)
+
+    def test_builtins_are_substituted(self):
+        e = sheet_harness.subst("x[$__range_s] @ ${__to} $__from $__interval_ms $job", {"job": "j"})
+        self.assertNotIn("$", e)
+        self.assertNotIn("__", e)
 
     def test_per_panel_fixture(self):
         d = {"panels": [mini_sheet(1, 0), mini_sheet(2, 4)]}

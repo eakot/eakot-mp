@@ -101,13 +101,13 @@ const item = (text, state, wrap, tip) =>
 // min-width, not width: an unexpected long value pushes the line instead of being clipped.
 const fx = (w, html) => `<span class="fx dim" style="min-width:${w}ch">${html}</span>`;
 // A number in a fixed-width column, right-aligned: padded with figure spaces (a digit's width, never collapsed), so
-// the last digits line up like durCol's. Not dim: in a table the numbers are the point.
-const fxr = (w, v) => { const t = v == null ? '—' : String(v);
-  return `<span class="fx fxr" style="min-width:${w}ch">${t.includes('<') ? t : t.padStart(w, FIG)}</span>`; };
+// the last digits line up like durCol's. Not dim: in a table the numbers are the point. `v` is plain TEXT (a number,
+// int(n), durCol(s)), escaped here, unlike fx()'s html.
+const fxr = (w, v) => `<span class="fx fxr" style="min-width:${w}ch">${esc((v == null ? '—' : String(v)).padStart(w, FIG))}</span>`;
 // A table: one width spec for the header and every row, so they cannot drift apart.
 //   const T = cols([[6, 'calls', 'r'], [24, 'tool'], [0, 'last error']]);   w = 0: free text, no fixed width
 //   T.hdr + rows.map((r) => item(T.row([int(r.calls), esc(r.tool), linkify(r.err)]), r.state)).join('')
-// Cells are HTML, escaped by the caller, as with fx().
+// Left-aligned cells are HTML, escaped by the caller, as with fx(); right-aligned ('r') cells are text, as with fxr().
 const cols = (spec) => {
   const cell = ([w, , al], v, i) => (w ? (al === 'r' ? fxr(w, v) : fx(w, v)) : v == null ? '' : String(v)) + (i < spec.length - 1 ? ' ' : '');
   return {

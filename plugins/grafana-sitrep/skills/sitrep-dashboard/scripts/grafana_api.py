@@ -7,6 +7,7 @@ one an MCP server in front of Grafana takes, is not one: Grafana answers it with
 """
 import json
 import os
+import sys
 import urllib.error
 import urllib.request
 
@@ -41,6 +42,8 @@ def base_of(url):
 
 
 def call(base, path, tok, body=None, timeout=60):
+    if tok and base.startswith("http://") and base.split("/")[2].split(":")[0] not in ("localhost", "127.0.0.1"):
+        warn_cleartext(base)
     req = urllib.request.Request(base.rstrip("/") + path, data=None if body is None else json.dumps(body).encode(),
                                  method="GET" if body is None else "POST")
     req.add_header("Accept", "application/json")
@@ -50,6 +53,16 @@ def call(base, path, tok, body=None, timeout=60):
         req.add_header("Authorization", f"Bearer {tok}")
     with urlopen(req, timeout=timeout) as r:
         return json.load(r)
+
+
+_warned = set()
+
+
+def warn_cleartext(base):
+    if base not in _warned:
+        _warned.add(base)
+        print(f"warning: {base} is plain http: the token crosses the network in clear text (fine on a private "
+              "mesh, not on the internet)", file=sys.stderr)
 
 
 def preflight(base, tok):

@@ -62,10 +62,14 @@ def walk(panels):
 
 
 def subst(expr, vars_):
-    for k, v in sorted(vars_.items(), key=lambda kv: -len(kv[0])):
+    """--var values, then Grafana's built-ins as the 6-hour run sees them. Longest name first: $__range_s before
+    $__range."""
+    now_ms = int(time.time()) * 1000
+    built = {"__rate_interval": "5m", "__interval_ms": "300000", "__interval": "5m", "__range_ms": str(RANGE_S * 1000),
+             "__range_s": str(RANGE_S), "__range": "6h", "__from": str(now_ms - RANGE_S * 1000), "__to": str(now_ms)}
+    for k, v in sorted({**built, **vars_}.items(), key=lambda kv: -len(kv[0])):
         expr = expr.replace("${%s}" % k, v).replace("$" + k, v)
-    return (expr.replace("$__rate_interval", "5m").replace("$__interval_ms", "300000").replace("$__interval", "5m")
-            .replace("$__range", "6h"))
+    return expr
 
 
 class Live:
@@ -180,6 +184,13 @@ def run_sheet(p, src, empty):
         if ok:
             print(f"FAIL OK on no data, must read N/D: {ok[:3]}\n")
             fails += 1
+        # a sheet with no tags (a plain-language one) shows a made-up number only in its values: none may hold a digit
+        vals = [html.unescape(re.sub(r"<[^>]*>", "", v)) for v in re.findall(
+            r'<span class="(?:v|fx fxr)"[^>]*>(.*?)</span>', r.stdout)]
+        made = [v for v in vals if re.search(r"\d", v)]
+        if made:
+            print(f"FAIL a number on no data, must read —: {made[:3]}\n")
+            fails += 1
     return fails
 
 
@@ -197,7 +208,7 @@ def run_history(p, src):
     for t in p.get("targets", []):
         if not promql(p, t):
             continue
-        left = re.findall(r"\$\{?(?!__)[A-Za-z_]\w*", subst(t["expr"], src.vars))  # not $1 of label_replace
+        left = re.findall(r"\$\{?[A-Za-z_]\w*", subst(t["expr"], src.vars))  # not $1 of label_replace
         if left:
             print(f"  ([{p['id']}] target {t['refId']} skipped: {sorted(set(left))} not given with --var)", file=sys.stderr)
             continue

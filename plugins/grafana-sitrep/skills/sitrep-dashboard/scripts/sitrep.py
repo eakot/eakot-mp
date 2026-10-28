@@ -139,6 +139,8 @@ def sheet(pid, title, desc, grid, targets, body_js, *, ds, repos=None, forge="ht
     `brief_label` replaces BRIEF_LABEL for this sheet (None: no label). `locale` sets int()'s digit grouping.
     """
     helper = f"sitrep{pid}"
+    if not isinstance(locale, str) or not re.fullmatch(r"[a-z]{2,3}(-[A-Za-z0-9]{2,8})*", locale):
+        raise SystemExit(f"sheet {pid}: locale {locale!r} is not a BCP 47 tag such as 'en-US' or 'ru-RU'")
     label = BRIEF_LABEL if brief_label is _UNSET else brief_label
     lib = (LIB.replace("/*FORGE*/'https://github.com'", json.dumps(forge)).replace("/*REPOS*/{}", json.dumps(repos or {}))
            .replace("/*LOCALE*/'en-US'", json.dumps(locale)).replace("/*BRIEF_LABEL*/'SITREP'", json.dumps(label)))

@@ -50,10 +50,18 @@ CHECKS = """() => {
 async def main(url, shot):
     token = grafana_api.token()
     grafana_api.preflight(grafana_api.base_of(url), token)
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    origin = "/".join(url.split("/", 3)[:3])  # scheme://host[:port]
     async with async_playwright() as p:
         b = await p.chromium.launch()
-        pg = await b.new_page(viewport={"width": 1800, "height": 3400}, extra_http_headers=headers)
+        pg = await b.new_page(viewport={"width": 1800, "height": 3400})
+        if token:
+            # the token goes to Grafana only: the page also loads fonts and images from other hosts
+            async def auth(route, request):
+                if request.url == origin or request.url.startswith(origin + "/"):
+                    await route.continue_(headers={**request.headers, "authorization": f"Bearer {token}"})
+                else:
+                    await route.continue_()
+            await pg.route("**/*", auth)
         errors = []
         pg.on("pageerror", lambda e: errors.append(str(e)[:300]))
         await pg.goto(url, wait_until="load", timeout=90000)
