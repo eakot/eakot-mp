@@ -72,6 +72,17 @@ const durCol = (s) => {
 const pct = (x, d) => (x == null ? '—' : `${(x * 100).toFixed(d == null ? 0 : d)}%`);
 const num = (x, d) => (x == null ? '—' : Number(x).toFixed(d || 0));
 const usd = (x) => (x == null ? '—' : x >= 100 ? `$${Math.round(x).toLocaleString('en-US')}` : `$${x.toFixed(2)}`);
+// A whole number with the sheet's digit grouping (sheet(locale=...)): 12 345 in ru-RU, 12,345 in en-US.
+const LOCALE = /*LOCALE*/'en-US';
+const int = (x) => (x == null ? '—' : Math.round(x).toLocaleString(LOCALE));
+// The word that goes with n, in the sheet's language: forms = [one, other] (English) or [one, few, many] (Russian
+// and the other Slavic languages): `${int(n)} ${plural(n, ['человек', 'человека', 'человек'])}`.
+const plural = (n, forms) => {
+  n = Math.abs(Math.round(n));
+  if (forms.length < 3) return forms[n === 1 ? 0 : 1];
+  const d = n % 10, dd = n % 100;
+  return forms[d === 1 && dd !== 11 ? 0 : d >= 2 && d <= 4 && (dd < 12 || dd > 14) ? 1 : 2];
+};
 
 // ---- the sheet ----
 // ok = fine · warn = look · bad = someone must act · info = idle on purpose · nd = no data (never shown as 0) · idle = context
@@ -89,7 +100,25 @@ const item = (text, state, wrap, tip) =>
 // A fixed-width column, `w` in ch. Fixed fields lead a line, so every line's free text starts at the same column.
 // min-width, not width: an unexpected long value pushes the line instead of being clipped.
 const fx = (w, html) => `<span class="fx dim" style="min-width:${w}ch">${html}</span>`;
-const brief = (text) => `<div class="br"><span class="bl">SITREP</span> ${text}</div>`;
+// A number in a fixed-width column, right-aligned: padded with figure spaces (a digit's width, never collapsed), so
+// the last digits line up like durCol's. Not dim: in a table the numbers are the point.
+const fxr = (w, v) => { const t = v == null ? '—' : String(v);
+  return `<span class="fx fxr" style="min-width:${w}ch">${t.includes('<') ? t : t.padStart(w, FIG)}</span>`; };
+// A table: one width spec for the header and every row, so they cannot drift apart.
+//   const T = cols([[6, 'calls', 'r'], [24, 'tool'], [0, 'last error']]);   w = 0: free text, no fixed width
+//   T.hdr + rows.map((r) => item(T.row([int(r.calls), esc(r.tool), linkify(r.err)]), r.state)).join('')
+// Cells are HTML, escaped by the caller, as with fx().
+const cols = (spec) => {
+  const cell = ([w, , al], v, i) => (w ? (al === 'r' ? fxr(w, v) : fx(w, v)) : v == null ? '' : String(v)) + (i < spec.length - 1 ? ' ' : '');
+  return {
+    hdr: `<div class="it ch">${spec.map((c, i) => cell(c, esc(c[1]), i)).join('')}</div>`,
+    row: (values) => spec.map((c, i) => cell(c, values[i], i)).join(''),
+  };
+};
+// The verdict line. Its label is the sheet's (sheet(brief_label=...)); null drops it, and the yellow rule on the left
+// still marks the line: a page read outside the team does not need the jargon.
+const BRIEF_LABEL = /*BRIEF_LABEL*/'SITREP';
+const brief = (text) => `<div class="br">${BRIEF_LABEL ? `<span class="bl">${esc(BRIEF_LABEL)}</span> ` : ''}${text}</div>`;
 const foot = (text) => `<div class="ft">${text}</div>`;
 // A file shown as written. Its newlines go in as &#10;: a literal one would be stripped by page(), and a blank line
 // would end the panel's HTML block, so the markdown pass would turn the rest of the file into headings and lists.
