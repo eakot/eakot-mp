@@ -76,19 +76,40 @@ class Live:
     """A Prometheus-compatible API, direct or through Grafana's datasource proxy."""
 
     def __init__(self, prom_url=None, grafana=None, vars_=None):
-        self.prom, self.vars = prom_url, vars_ or {}
+        self.prom, self.vars, self.unchecked, self.ds_cache = prom_url, vars_ or {}, 0, {}
         self.grafana = grafana_api.base_of(grafana) if grafana else None
         self.tok = grafana_api.token() if grafana else None
         if self.grafana:
             grafana_api.preflight(self.grafana, self.tok)
 
+    def resolve(self, panel, target):
+        """(type, uid) of a target's datasource; type None when it cannot be told. A mixed panel's untyped target,
+        or a legacy datasource given by name, is looked up in Grafana when there is one."""
+        ref = target.get("datasource")
+        if not ref or (isinstance(ref, dict) and ref.get("uid") in (None, "-- Mixed --")):
+            ref = panel.get("datasource")
+        if isinstance(ref, dict) and ref.get("uid") == "-- Mixed --":
+            ref = None
+        kind = ref.get("type") if isinstance(ref, dict) else None
+        uid = ref.get("uid") if isinstance(ref, dict) else None
+        if (not kind or kind == "datasource") and self.grafana and ref:
+            key = subst(uid if isinstance(ref, dict) else str(ref), self.vars)
+            if key not in self.ds_cache:
+                path = f"/api/datasources/uid/{urllib.parse.quote(key)}" if isinstance(ref, dict) else \
+                    f"/api/datasources/name/{urllib.parse.quote(key)}"
+                try:
+                    d = grafana_api.call(self.grafana, path, self.tok)
+                    self.ds_cache[key] = (d.get("type"), d.get("uid"))
+                except Exception:
+                    self.ds_cache[key] = (None, None)
+            kind, uid = self.ds_cache[key]
+        return (None if kind == "datasource" else kind), uid
+
     def base(self, panel, target):
         if self.prom:
             return self.prom.rstrip("/")
-        uid = (target.get("datasource") or {}).get("uid")
-        if not uid or uid == "-- Mixed --":
-            uid = (panel.get("datasource") or {}).get("uid")
-        if not uid or uid == "-- Mixed --":
+        uid = self.resolve(panel, target)[1]
+        if not uid:
             raise RuntimeError("no datasource uid on the target or the panel")
         return f"{self.grafana}/api/datasources/proxy/uid/{urllib.parse.quote(subst(uid, self.vars))}"
 
@@ -194,19 +215,26 @@ def run_sheet(p, src, empty):
     return fails
 
 
-def promql(p, t):
-    """Whether a target is PromQL: its datasource type, or the panel's, names Prometheus or VictoriaMetrics.
-    A carried Loki or SQL panel also has an `expr`, and the PromQL API would reject it."""
-    ds = t.get("datasource") if isinstance(t.get("datasource"), dict) and t["datasource"].get("type") else p.get("datasource")
-    kind = (ds or {}).get("type", "") if isinstance(ds, dict) else ""
-    return "expr" in t and ("prometheus" in kind or "victoria" in kind)
+def is_promql(kind):
+    return "prometheus" in kind or "victoria" in kind
 
 
 def run_history(p, src):
-    """Run a chart's PromQL targets once as range queries; return its failure count."""
+    """Run a chart's PromQL targets once as range queries; return its failure count. A carried Loki or SQL panel
+    also has an `expr`, so the datasource type decides; a target whose type cannot be told is reported UNCHECKED,
+    never passed over in silence."""
     fails, got = 0, []
     for t in p.get("targets", []):
-        if not promql(p, t):
+        if "expr" not in t:
+            continue
+        kind = src.resolve(p, t)[0]
+        if kind is None:
+            print(f"UNCHECKED [{p['id']}] {p.get('title')}: target {t['refId']} — datasource type unknown "
+                  "(no type on the target or panel; --grafana resolves it)")
+            src.unchecked += 1
+            continue
+        if not is_promql(kind):
+            print(f"  ([{p['id']}] target {t['refId']} skipped: a {kind} datasource)", file=sys.stderr)
             continue
         left = re.findall(r"\$\{?[A-Za-z_]\w*", subst(t["expr"], src.vars))  # not $1 of label_replace
         if left:
@@ -245,9 +273,10 @@ def main():
     fails = sum(run_sheet(p, src, a.empty) for p in sheets)
     charts = []
     if isinstance(src, Live):
-        charts = [p for p in panels if p.get("type") not in (SHEET, "row") and any(promql(p, t) for t in p.get("targets", []))]
+        charts = [p for p in panels if p.get("type") not in (SHEET, "row") and any("expr" in t for t in p.get("targets", []))]
         fails += sum(run_history(p, src) for p in charts)
-    print(f"{len(sheets)} sheet(s), {len(charts)} chart(s), {fails} failure(s)")
+    left = f", {src.unchecked} target(s) UNCHECKED" if getattr(src, "unchecked", 0) else ""
+    print(f"{len(sheets)} sheet(s), {len(charts)} chart(s), {fails} failure(s){left}")
     return 1 if fails else 0
 
 

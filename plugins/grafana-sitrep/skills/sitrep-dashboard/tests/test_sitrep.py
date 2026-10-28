@@ -250,12 +250,16 @@ class FakeGrafana(http.server.BaseHTTPRequestHandler):
             return
         if self.headers.get("Authorization") != "Bearer glsa_good":
             return self.reply(401, {"message": "Invalid API key"})
+        if self.path.startswith("/api/datasources/uid/vm") or self.path.startswith("/api/datasources/name/Prometheus"):
+            return self.reply(200, {"type": "prometheus", "uid": "vm"})
+        if self.path.startswith(("/api/datasources/uid/", "/api/datasources/name/")):
+            return self.reply(404, {})
         if self.path.startswith("/api/search"):
             return self.reply(200, [])
         if self.path.startswith("/api/dashboards/uid/"):
             return self.reply(200, {"meta": {"folderUid": "fold1"}, "dashboard": {}})
         if "/api/v1/query_range" in self.path:
-            if "label_replace" in self.path:
+            if "label_replace" in self.path or "bad%28%28" in self.path:
                 return self.reply(422, {"status": "error", "errorType": "422", "error": "duplicate output timeseries"})
             return self.reply(200, {"status": "success", "data": {"result": [{"metric": {}, "values": []}]}})
         if "/api/v1/query" in self.path:
@@ -305,6 +309,28 @@ class Live(unittest.TestCase):
         # the Loki panel and the target with an unset $job are not sent to the PromQL API
         self.assertIn("1 failure(s)", r.stdout)
         self.assertFalse(any("lk" in p or "job" in p for _, p, _ in FakeGrafana.seen if isinstance(p, str)))
+
+    def untyped(self):
+        mixed = {"id": 5, "type": "timeseries", "title": "mixed", "gridPos": {"h": 4, "w": 8, "x": 0, "y": 8},
+                 "datasource": {"type": "datasource", "uid": "-- Mixed --"}, "targets": [{"refId": "A", "uid": "x",
+                 "datasource": {"uid": "vm"}, "expr": "bad(("}]}
+        legacy = {"id": 6, "type": "graph", "title": "legacy", "gridPos": {"h": 4, "w": 8, "x": 8, "y": 8},
+                  "datasource": "Prometheus", "targets": [{"refId": "A", "expr": "bad(("}]}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump({"uid": "u", "panels": [mini_sheet(1, 0), mixed, legacy]}, f)
+        return f.name
+
+    def test_untyped_datasource_is_resolved_through_grafana(self):
+        r = self.run_env([sys.executable, HARNESS, self.untyped(), "--grafana", self.url], "glsa_good")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("[5] mixed: range target A FAILED", r.stdout)
+        self.assertIn("[6] legacy: range target A FAILED", r.stdout)
+
+    def test_untyped_datasource_without_grafana_is_unchecked_not_silent(self):
+        r = subprocess.run([sys.executable, HARNESS, self.untyped(), self.url + "/api/datasources/proxy/uid/vm"],
+                           capture_output=True, text=True, timeout=120)
+        self.assertIn("UNCHECKED [5] mixed", r.stdout)
+        self.assertIn("2 target(s) UNCHECKED", r.stdout)
 
     def test_redirect_is_not_followed_with_the_token(self):
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
