@@ -131,6 +131,14 @@ class Sheet(unittest.TestCase):
         with self.assertRaises(SystemExit):
             mini_sheet(1, 0, consts={"not-js": 1})
 
+    def test_column_titles_are_escaped_once(self):
+        s = mini_sheet(1, 0, "const html = page('01', 'T', brief('x') + cols([[8, 'p95 <1s', 'r'], [6, 'in&out'], [0, 'a\\'b']]).hdr);")
+        js = sheet_harness.SHIM % "[]" + s["options"]["helpers"] + "\nprocess.stdout.write(String(OUT));\n"
+        out = subprocess.run(["node", "-e", js], capture_output=True, text=True, check=True).stdout
+        self.assertNotIn("&amp;amp;", out)
+        self.assertNotIn("&amp;lt;", out)
+        self.assertEqual(sheet_harness.text(out).splitlines()[-1].split(), ["p95", "<1s", "in&out", "a'b"])
+
     def test_redeclaring_a_library_name_is_refused(self):
         with self.assertRaisesRegex(SystemExit, "plural"):
             mini_sheet(1, 0, "const plural = (n) => 'x';\nconst html = page('01', 'T', brief('a'));")
@@ -209,6 +217,15 @@ class Harness(unittest.TestCase):
         e = sheet_harness.subst("x[$__range_s] @ ${__to} $__from $__interval_ms $job", {"job": "j"})
         self.assertNotIn("$", e)
         self.assertNotIn("__", e)
+
+    def test_a_run_that_checks_nothing_fails(self):
+        d = {"panels": [mini_sheet(1, 0)]}
+        r = harness(d, "--empty", "--panel", "999")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("no such panel", r.stdout)
+        r = harness({"panels": [sitrep.row(1, "r", 0)]}, "--empty")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("nothing to check", r.stdout)
 
     def test_per_panel_fixture(self):
         d = {"panels": [mini_sheet(1, 0), mini_sheet(2, 4)]}

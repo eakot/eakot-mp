@@ -275,6 +275,14 @@ def main():
     if isinstance(src, Live):
         charts = [p for p in panels if p.get("type") not in (SHEET, "row") and any("expr" in t for t in p.get("targets", []))]
         fails += sum(run_history(p, src) for p in charts)
+    # a run that checked nothing is not a pass
+    missing = sorted(set(a.panel or []) - {p.get("id") for p in panels})
+    if missing:
+        print(f"FAIL --panel {missing}: no such panel")
+        fails += 1
+    if not sheets and not charts:
+        print("FAIL nothing to check: no status sheet (and no chart, with a live source) selected")
+        fails += 1
     left = f", {src.unchecked} target(s) UNCHECKED" if getattr(src, "unchecked", 0) else ""
     print(f"{len(sheets)} sheet(s), {len(charts)} chart(s), {fails} failure(s){left}")
     return 1 if fails else 0
