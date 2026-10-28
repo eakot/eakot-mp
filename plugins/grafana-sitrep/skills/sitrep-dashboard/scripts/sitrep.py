@@ -13,7 +13,6 @@ Needs the Business Text panel plugin (marcusolsson-dynamictext-panel; 6.2.0 is t
 import copy
 import json
 import re
-import textwrap
 from pathlib import Path
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
@@ -84,6 +83,47 @@ def walk(panels):
         yield from p.get("panels", [])
 
 
+_DECL = re.compile(r"(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)")
+# Blanked before braces are counted: comments, strings, template literals, and regex literals (a `/` where a value
+# starts: after an operator, a bracket, a comma or `return`), whose `\{` or `\(` would otherwise count.
+_SKIP = re.compile(r"(?P<c>//[^\n]*|/\*.*?\*/)|(?P<s>'(?:[^'\\\n]|\\.)*'|\"(?:[^\"\\\n]|\\.)*\"|`(?:[^`\\]|\\.)*`)"
+                   r"|(?P<pre>(?:^|[=(,:\[!&|?{};+\-*%<>~^]|\breturn)\s*)/(?![/*])(?:[^/\\\n\[]|\\.|\[(?:[^\]\\\n]|\\.)*\])+/[a-z]*",
+                   re.S | re.M)
+_COL0 = re.compile(r"^\s*(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)", re.M)
+
+
+def top_level_decls(js):
+    """Names a body declares at its top level, where they would collide with the library's: a declaration inside
+    a block or a function shadows legally, however it is indented. Comments, strings and regex literals are
+    blanked first, so their braces do not count. A lint, not a parser: when the braces still do not balance, it
+    also takes every declaration that starts a line, as before (fail closed: refuse rather than miss)."""
+    def blank(m):
+        if m.group("c"):
+            return " "
+        if m.group("s"):
+            return '""'
+        return m.group("pre") + "/x/"
+    src, js = js, _SKIP.sub(blank, js)
+    names, depth, low, i = set(), 0, 0, 0
+    while i < len(js):
+        c = js[i]
+        if c in "{([":
+            depth += 1
+        elif c in "})]":
+            depth -= 1
+            low = min(low, depth)
+        elif depth == 0 and (i == 0 or not (js[i - 1].isalnum() or js[i - 1] in "_$.")):
+            m = _DECL.match(js, i)
+            if m:
+                names.add(m.group(1))
+                i = m.end()
+                continue
+        i += 1
+    if depth or low < 0:
+        names |= set(_COL0.findall(src))
+    return names
+
+
 # Runs after the panel renders: links open in a new tab (the sanitizer drops `target`), and each flow() graph gets
 # its edges, drawn in svg built through the DOM because html <svg> does not survive the sanitizer.
 AFTER_RENDER = r"""
@@ -148,12 +188,12 @@ def sheet(pid, title, desc, grid, targets, body_js, *, ds, repos=None, forge="ht
         targets = targets + [registry_target]
     head = ""
     # the library and the body share one scope: a name declared in both breaks the sheet only when it renders
-    clash = set(re.findall(r"^(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)", textwrap.dedent(body_js), re.M))
-    clash = (clash - {"html"}) & LIB_NAMES
+    decls = top_level_decls(body_js)
+    clash = (decls - {"html"}) & LIB_NAMES
     if clash:
         raise SystemExit(f"sheet {pid}: body_js declares {sorted(clash)}, which the library already defines "
                          "(see SKILL.md §4): use the library's, or rename yours")
-    twice = set(consts or {}) & set(re.findall(r"^(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)", textwrap.dedent(body_js), re.M))
+    twice = set(consts or {}) & decls
     if twice:
         raise SystemExit(f"sheet {pid}: {sorted(twice)} is passed in consts and declared in body_js: keep one")
     for k, v in (consts or {}).items():
@@ -320,7 +360,7 @@ def promql_parts(expr):
         labels |= {x.strip() for x in m.group(1).split(",") if x.strip()}
     e = re.sub(r"\b(?:by|without|on|ignoring|group_left|group_right)\s*\([^)]*\)", " ", e)
     names = {m.group(1) for m in re.finditer(r"(?<![\w.])([A-Za-z_:][\w:]*)\b(?!\s*\()", e)}
-    return names - _PROMQL_WORDS, labels
+    return {n for n in names if n.lower() not in _PROMQL_WORDS}, labels  # Inf, NaN: any case
 
 
 def parity(src_panels, new_panels):
