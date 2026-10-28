@@ -274,7 +274,7 @@ def coverage(src_panels, mapping, new_panels, questions=None):
     "dropped", so nothing leaves the page silently. Returns the coverage table (markdown) for the hand-over."""
     src = [p for p in walk(src_panels) if p.get("type") != "row"]
     new = {p["id"]: p for p in walk(new_panels)}  # required: a target is checked against the page, never assumed
-    errs = [f"original panel {p['id']} {p.get('title')!r} is not mapped" for p in src if p["id"] not in mapping]
+    errs = [f"original panel {p['id']} {p.get('title')!r} is not mapped" for p in src if mapping.get(p["id"]) is None]
     known = {p["id"] for p in src}
     errs += [f"mapping names panel {k}, which the original does not have" for k in mapping if k not in known]
     out = ["| old | title | question | new home |", "|---|---|---|---|"]

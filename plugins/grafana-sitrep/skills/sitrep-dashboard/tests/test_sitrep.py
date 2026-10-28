@@ -103,6 +103,10 @@ class Coverage(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "panel 2 'b' is not mapped"):
             sitrep.coverage(self.SRC, {1: 10}, [{"id": 10}])
 
+    def test_none_target_is_unmapped(self):
+        with self.assertRaisesRegex(SystemExit, "panel 1 'a' is not mapped"):
+            sitrep.coverage(self.SRC, {1: None, 2: 10}, [{"id": 10}])
+
     def test_drop_needs_reason_and_target_must_exist(self):
         with self.assertRaisesRegex(SystemExit, "needs its reason"):
             sitrep.coverage(self.SRC, {1: "dropped:", 2: 10}, [{"id": 10}])
@@ -159,6 +163,12 @@ class Sheet(unittest.TestCase):
         self.assertNotIn("undefined", out)
         self.assertNotIn("-0", out)
         self.assertEqual(out.count("—"), 3)
+
+    def test_int_keeps_nan_visible(self):
+        s = mini_sheet(1, 0, "const html = page('01', 'T', brief(int(0 / 0) + '|' + int(-0.4) + '|' + int(1234)));")
+        js = sheet_harness.SHIM % "[]" + s["options"]["helpers"] + "\nprocess.stdout.write(String(OUT));\n"
+        out = subprocess.run(["node", "-e", js], capture_output=True, text=True, check=True).stdout
+        self.assertIn("NaN|0|1,234", out)
 
     def test_const_also_declared_in_body_is_refused(self):
         with self.assertRaisesRegex(SystemExit, "keep one"):
@@ -385,6 +395,23 @@ class Live(unittest.TestCase):
                            capture_output=True, text=True, timeout=120)
         self.assertIn("UNCHECKED [5] mixed", r.stdout)
         self.assertIn("2 target(s) UNCHECKED", r.stdout)
+
+    def test_blank_and_hidden_targets_are_not_run(self):
+        chart = sitrep.history(2, "chart", "", {"h": 4, "w": 16, "x": 8, "y": 0},
+                               [sitrep.q("A", "up", VM, instant=False), sitrep.q("B", "", VM, instant=False),
+                                dict(sitrep.q("C", "bad((", VM, instant=False), hide=True)], interval="5m")
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump({"uid": "u", "panels": [mini_sheet(1, 0), chart]}, f)
+        r = self.run_env([sys.executable, HARNESS, f.name, "--grafana", self.url], "glsa_good")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("(range, 6 h): A 1 series", r.stdout)
+
+    def test_grafana_without_a_token_says_so(self):
+        env = {k: v for k, v in os.environ.items() if not k.startswith("GRAFANA_TOKEN")}
+        r = subprocess.run([sys.executable, HARNESS, self.untyped(), "--grafana", self.url], capture_output=True,
+                           text=True, env=env, timeout=60)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("needs a service-account token", r.stderr)
 
     def test_redirect_without_a_token_is_followed(self):
         req = urllib.request.Request(self.url + "/hop")

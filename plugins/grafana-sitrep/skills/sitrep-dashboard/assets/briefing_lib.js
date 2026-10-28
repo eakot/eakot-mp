@@ -74,7 +74,7 @@ const num = (x, d) => (x == null ? '—' : Number(x).toFixed(d || 0));
 const usd = (x) => (x == null ? '—' : x >= 100 ? `$${Math.round(x).toLocaleString('en-US')}` : `$${x.toFixed(2)}`);
 // A whole number with the sheet's digit grouping (sheet(locale=...)): 12 345 in ru-RU, 12,345 in en-US.
 const LOCALE = /*LOCALE*/'en-US';
-const int = (x) => (x == null ? '—' : (Math.round(x) || 0).toLocaleString(LOCALE)); // || 0: never "-0"
+const int = (x) => { if (x == null) return '—'; const r = Math.round(x); return (r === 0 ? 0 : r).toLocaleString(LOCALE); }; // never "-0"; NaN stays NaN
 // The word that goes with n, in the sheet's language: forms = [one, other] (English) or [one, few, many] (Russian
 // and the other Slavic languages): `${int(n)} ${plural(n, ['человек', 'человека', 'человек'])}`.
 const plural = (n, forms) => {

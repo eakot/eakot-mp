@@ -80,6 +80,8 @@ class Live:
         self.grafana = grafana_api.base_of(grafana) if grafana else None
         self.tok = grafana_api.token() if grafana else None
         if self.grafana:
+            if not self.tok:
+                raise SystemExit("--grafana needs a service-account token: set GRAFANA_TOKEN or GRAFANA_TOKEN_FILE")
             grafana_api.preflight(self.grafana, self.tok)
 
     def resolve(self, panel, target):
@@ -125,6 +127,8 @@ class Live:
                 d = json.load(e)
             except ValueError:
                 raise RuntimeError(f"HTTP {e.code} {e.msg}") from None
+            if not isinstance(d, dict) or "status" not in d:  # Grafana's own refusal, not the datasource's
+                raise RuntimeError(f"HTTP {e.code} {(d or {}).get('message') if isinstance(d, dict) else e.msg}") from None
         if d.get("status") != "success":
             raise RuntimeError(f"{d.get('errorType')}: {d.get('error')}")
         return d["data"]["result"]
@@ -173,6 +177,11 @@ def text(markup):
 PROBE = 987654.0
 
 
+def live(t):
+    """A target Grafana would run: an expression that is not blank, and not hidden."""
+    return bool(str(t.get("expr") or "").strip()) and not t.get("hide")
+
+
 # The probe's labels answer any key, so a sheet that reads r.labels.repo renders instead of throwing.
 PROBE_SHIM = "SERIES_IN.forEach((f) => f.fields.forEach((x) => { x.labels = new Proxy({}, { get: (o, k) => " \
     "(typeof k === 'string' && k !== 'toJSON' && k !== 'then' ? 'probe' : undefined) }); }));\n"
@@ -196,8 +205,9 @@ def run_sheet(p, src, empty):
     """Print one sheet; return its failure count."""
     fails, series = 0, []
     for t in p.get("targets", []):
-        if "expr" not in t:
-            print(f"  (skipped non-PromQL target {t.get('refId')})", file=sys.stderr)
+        if not live(t):
+            if "expr" not in t:
+                print(f"  (skipped non-PromQL target {t.get('refId')})", file=sys.stderr)
             continue
         try:
             res = src.instant(p, t)
@@ -230,7 +240,7 @@ def run_sheet(p, src, empty):
         # that also shows when every target answers PROBE is static text ("30 days"); one that shows only on no data
         # was invented for it ("0 people").
         probe = [{"refId": t["refId"], "fields": [{"type": "number", "labels": {}, "values": [PROBE]}]}
-                 for t in p.get("targets", []) if "expr" in t]
+                 for t in p.get("targets", []) if live(t)]
         pr = render(p, probe, probe=True)
         static = set(values(pr.stdout))
         made = [v for v in values(r.stdout) if re.search(r"\d", v) and v not in static]
@@ -252,7 +262,7 @@ def run_history(p, src):
     never passed over in silence."""
     fails, got = 0, []
     for t in p.get("targets", []):
-        if "expr" not in t:
+        if not live(t):
             continue
         kind = src.resolve(p, t)[0]
         if kind is None:
@@ -300,7 +310,7 @@ def main():
     fails = sum(run_sheet(p, src, a.empty) for p in sheets)
     charts = []
     if isinstance(src, Live):
-        charts = [p for p in panels if p.get("type") not in (SHEET, "row") and any("expr" in t for t in p.get("targets", []))]
+        charts = [p for p in panels if p.get("type") not in (SHEET, "row") and any(live(t) for t in p.get("targets", []))]
         fails += sum(run_history(p, src) for p in charts)
     # a run that checked nothing is not a pass
     missing = sorted(set(a.panel or []) - {p.get("id") for p in panels})
