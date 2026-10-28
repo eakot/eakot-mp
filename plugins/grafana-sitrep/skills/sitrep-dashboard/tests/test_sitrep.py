@@ -181,6 +181,14 @@ class Sheet(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "plural"):
             mini_sheet(1, 0, "  const plural = 1;\n  const html = page('01', 'T', brief('x'));")
 
+    def test_regex_literals_do_not_hide_a_redeclaration(self):
+        for body in ("const a = /\\{/;\nconst plural = 1;", "const a = /\\}/;\nconst plural = 1;",
+                     "const a = s.replace(/\\(/g, '');\nconst plural = 1;", "const a = /[{}]/;\nconst plural = 1;",
+                     "const r = x / y; const plural = 1;"):
+            self.assertIn("plural", sitrep.top_level_decls(body), body)
+        # a regex with a brace inside a function still lets the function's own declarations shadow
+        self.assertEqual(sitrep.top_level_decls("const f = (s) => {\n const sub = s.replace(/\\{/g, '');\n return sub;\n};"), {"f"})
+
     def test_const_also_declared_in_body_is_refused(self):
         with self.assertRaisesRegex(SystemExit, "keep one"):
             mini_sheet(1, 0, "const TN = 2;\nconst html = page('01', 'T', brief('x'));", consts={"TN": 1})

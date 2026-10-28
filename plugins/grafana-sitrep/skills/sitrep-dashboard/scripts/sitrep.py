@@ -84,21 +84,34 @@ def walk(panels):
 
 
 _DECL = re.compile(r"(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)")
-_SKIP = re.compile(r"//[^\n]*|/\*.*?\*/|'(?:[^'\\\n]|\\.)*'|\"(?:[^\"\\\n]|\\.)*\"|`(?:[^`\\]|\\.)*`", re.S)
+# Blanked before braces are counted: comments, strings, template literals, and regex literals (a `/` where a value
+# starts: after an operator, a bracket, a comma or `return`), whose `\{` or `\(` would otherwise count.
+_SKIP = re.compile(r"(?P<c>//[^\n]*|/\*.*?\*/)|(?P<s>'(?:[^'\\\n]|\\.)*'|\"(?:[^\"\\\n]|\\.)*\"|`(?:[^`\\]|\\.)*`)"
+                   r"|(?P<pre>(?:^|[=(,:\[!&|?{};+\-*%<>~^]|\breturn)\s*)/(?![/*])(?:[^/\\\n\[]|\\.|\[(?:[^\]\\\n]|\\.)*\])+/[a-z]*",
+                   re.S | re.M)
+_COL0 = re.compile(r"^\s*(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)", re.M)
 
 
 def top_level_decls(js):
     """Names a body declares at its top level, where they would collide with the library's: a declaration inside
-    a block or a function shadows legally, however it is indented. Strings, template literals and comments are
-    blanked first, so their braces do not count. A lint, not a parser."""
-    js = _SKIP.sub(lambda m: '""' if m.group(0)[0] in "'\"`" else " ", js)
-    names, depth, i = set(), 0, 0
+    a block or a function shadows legally, however it is indented. Comments, strings and regex literals are
+    blanked first, so their braces do not count. A lint, not a parser: when the braces still do not balance, it
+    also takes every declaration that starts a line, as before (fail closed: refuse rather than miss)."""
+    def blank(m):
+        if m.group("c"):
+            return " "
+        if m.group("s"):
+            return '""'
+        return m.group("pre") + "/x/"
+    src, js = js, _SKIP.sub(blank, js)
+    names, depth, low, i = set(), 0, 0, 0
     while i < len(js):
         c = js[i]
         if c in "{([":
             depth += 1
         elif c in "})]":
             depth -= 1
+            low = min(low, depth)
         elif depth == 0 and (i == 0 or not (js[i - 1].isalnum() or js[i - 1] in "_$.")):
             m = _DECL.match(js, i)
             if m:
@@ -106,6 +119,8 @@ def top_level_decls(js):
                 i = m.end()
                 continue
         i += 1
+    if depth or low < 0:
+        names |= set(_COL0.findall(src))
     return names
 
 
