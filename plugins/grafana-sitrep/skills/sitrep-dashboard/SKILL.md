@@ -236,8 +236,14 @@ invisible here"). An unnamed gap reads as green.
 
 ## 3. Workflow
 
-1. **Inventory.** Export the dashboard JSON. For every panel, write down the operator question it
-   answers, its query, and what it shows *now*. A panel with no question goes to the bottom, collapsed,
+1. **Inventory.** Export the dashboard JSON with `scripts/export.py <grafana-url> <uid> orig.json`: the
+   file comes straight from Grafana, never through you. With only an MCP server in front of Grafana, the
+   JSON reaches you as a tool result, and you write the file yourself. Then check that copy before anything
+   else: one dropped escape in a long SQL query changes the original that the generator reads and that
+   `coverage()` checks. Put `sitrep.expect_original(src, panels=N, queries=M, ends={(id, "A"): "<last
+   words of the query>"})` at the top of the generator, filled from the tool result. Add any invariant the
+   page itself has, too (four queries that share one CTE: assert they do). For every panel, write down the
+   operator question it answers, its query, and what it shows *now*. A panel with no question goes to the bottom, collapsed,
    or away. Keep the original's uid, so links to it still work. Then pick one of two modes:
    - **Keep.** The legacy panels stay as a drill-down below the sheets. A large community dashboard
      (Node Exporter Full: 14 rows, ~120 panels) keeps its deep rows: the sheets replace only its top
@@ -256,6 +262,15 @@ invisible here"). An unnamed gap reads as green.
      "how to read" text panels move into the sheets and their (i). A legacy statistical quirk is kept and
      labelled (`*`, the reason in the footer), not silently "fixed". `carry_panels()` is a fine first
      step: carry as-is, then redraw panel by panel.
+
+   **A page already half a sitrep.** Some pages were refactored once by hand: Grafana tables with a verdict
+   row, colour-mapped tag cells, thresholds in the descriptions. Restyling those adds little. Most of the
+   value is in the three things a table cannot do, so redraw with them in mind:
+   - **a link on every entity**: a table name to the tracker's search for its open issues, a database to
+     this same page filtered by it;
+   - **a verdict computed from the same values as the lines**, not a hand-kept row;
+   - **the hidden state** the old page mentioned only in its GAP. Example: 15 145 directories with an
+     unknown status, shown as an INFO line.
 2. **Answer as the operator.** Query every series live. Mark each defect:
    - an impossible value;
    - "No data";
@@ -265,6 +280,19 @@ invisible here"). An unnamed gap reads as green.
    - an entity with no link.
 
    Find the cause of each one in the query, not the style. Most "ugly" panels are wrong panels.
+
+   **When you cannot run the source's queries.** SQL behind Grafana runs only through `/api/ds/query`,
+   which runs *any* SQL, and a careful setup blocks it, rightly. Then:
+   - **Read what it shows now through a read-only tool**: an MCP server or a domain API over the same
+     database.
+   - **Run the SQL on a local copy of the schema.** `sheet_harness.py out.json --dump-sql sql/ --var ...`
+     writes every SQL target with its variables substituted. Build the schema from the source repo's
+     migrations or test fixtures, seed one row per category and per state, and run each sheet's SQL and
+     the original's own summary query on it. Compare the two line by line, once per value of each
+     template variable. This is the only proof that the SQL runs at all.
+   - **Or hand the dry-run to an engineer** with a read-only DSN: name the command and what to compare.
+
+   Say in the hand-over which of these the numbers rest on.
 3. **Get the rulings.** Ask the human, in one message, only the rulings listed in §1 that the data and
    history cannot settle. A threshold that an alert rule in the repo already pages on is not a ruling:
    copy it, and name the rule in the (i). When no one is there to answer (a background run), set the
@@ -272,6 +300,13 @@ invisible here"). An unnamed gap reads as green.
 4. **Group and rank.** Arrange one row per question, most expensive first. The sheet goes on the left
    (`w` 8–12), its history to the right, both the same height. Number the sheets `01`, `01·B`, `02`, and
    so on.
+
+   **A source with no honest history.** Some sources are a daily snapshot: the table holds the last run
+   only. An archive may exist and still rebuild only part of the picture, or fill a column only from some
+   migration date you cannot check. A partial chart then draws real zeros next to "zero because the
+   column was not filled yet", the "bucket stuck at 0" trap. **An unverifiable chart is worse than none.**
+   Put two sheets side by side, or one sheet at full width. Add a GAP to its (i) naming the source a
+   history chart could later come from and what has to be verified first.
 5. **Generate, don't hand-edit.** Write a generator that reads the *original* JSON and writes the new
    one, using `scripts/sitrep.py` (`sheet`, `history`, `today`, `opened_closed`, `registry`, `finish`).
    `history` requires `interval`, the source's cadence; `finish(d, time_range=...)` sets the page default.
@@ -292,23 +327,32 @@ invisible here"). An unnamed gap reads as green.
    - `--grafana <url>`, through Grafana's datasource proxy, when only Grafana can reach the datasource
      (an in-cluster URL). It needs a Grafana service-account token (step 6);
    - `--fixture file.json`, `{refId: [[labels, value], ...]}`, filled from whatever query tool you have
-     (an MCP server's one-expression-at-a-time query is enough). Keep the hostile inputs in one:
+     (an MCP server's one-expression-at-a-time query is enough). For an SQL or Infinity target, give the
+     table instead: `{refId: {"rows": [{"col": value, ...}, ...]}}`. That is the frame `table(ref)`
+     reads, so seed every category and state the SQL can return. Keep the hostile inputs in one:
      `constructor#5`, an apostrophe, `<b>`. A sheet or refId the fixture does not name fails the run;
-     no data is an explicit `[]`;
+     no data is an explicit `[]`. With `--grafana`, SQL targets run live through `/api/ds/query`;
+     with a plain Prometheus URL they are reported UNCHECKED;
    - `--empty`, **mandatory**: every target answers nothing. Every number must read N/D: a line
      tagged OK fails the run, and so does a number that shows only when there is no data ("0 people"
      on an untagged sheet; static text such as "30 days" is told apart by a second run with data). It catches the sheets that say "0 · OK" with no data.
+   - `--empty REF[,REF]` beside a source, **once per query a sheet reads**: only those refIds answer
+     nothing (`7:C` = panel 7's C only). A real failure empties one query, not all of them. A line
+     whose value comes from a query that still answers may then rightly stay OK. Name each such line
+     with `--allow-ok "<text of the line>"`, so the exception is written down.
 
    Add `--var node=...` per entity (step 2 of the "Which host?" answer), and run once with a value that
-   matches nothing. A deploy-and-screenshot round trip takes minutes; this takes seconds, and it is where
+   matches nothing. `--var` substitutes whole names only, so `$schema` never eats the start of
+   `$schema_type`; a hand-written runner that uses `str.replace` will. A deploy-and-screenshot round trip takes minutes; this takes seconds, and it is where
    most classification mistakes show up.
 6. **Deploy, render and check.** Deploy with `scripts/deploy.py out.json <grafana-url> [--folder <uid>]`:
    the file goes straight to `/api/dashboards/db`, so its size does not matter (a dozen sheets is over
    100 KB, too large to pass reliably as a tool-call argument) and the token never passes through you.
    Every script reads the token from `GRAFANA_TOKEN`, or from the file `GRAFANA_TOKEN_FILE` names, never
    from argv. It must be a **Grafana service-account token** (`glsa_…`): a gateway's token, such as the
-   one an MCP server in front of Grafana takes, gets 401 "Invalid API key", and the scripts check this
-   first and say so. With no token at all, hand the operator the file to import in the UI.
+   one an MCP server in front of Grafana takes, gets 401 "Invalid API key". The scripts check this first.
+   On a 401 they print the host they tried, where the token came from, and its prefix class (`glsa_`,
+   other, empty). A `glsa_` token refused there most likely belongs to another Grafana instance. With no token at all, hand the operator the file to import in the UI.
 
    Then run `scripts/render_check.py <url> shot.png`. It scrolls the page, because Grafana renders a panel
    only once it is in view. Put a templated page's variables in the URL (`&var-node=...`). It checks for:
@@ -337,9 +381,9 @@ invisible here"). An unnamed gap reads as green.
 
 | Group | Helpers |
 |---|---|
-| Data | `rows(ref)` → `[{labels, value}]`; `one(ref)`; `table(ref)` for Infinity or SQL frames |
+| Data | `rows(ref)` → `[{labels, value}]`; `one(ref)`; `table(ref)` → `[{col: value}]` for Infinity or SQL frames (`sitrep.sql(ref, raw_sql, ds)` builds the target) |
 | Links | `repoA`, `prA`, `commitA`, `fileA`, `wfA`, `refA`, `linkify(text, repo)` |
-| Values | `dur` (inline), `durCol` (a fixed-width column), `pct`, `num`, `usd`, `int` (grouped digits, the sheet's `locale`), `plural(n, forms)` (`[one, other]` or `[one, few, many]`); `lvl(x, [[0,'ok'],[2,'warn'],[6,'bad']])`; `worst(states)` |
+| Values | `dur` (inline), `durCol` (a fixed-width column), `pct`, `num`, `usd`, `bytes` (base 1024: `5.3 GB`; say so in the (i); in a column `fxr(8, bytes(x))`), `int` (grouped digits, the sheet's `locale`), `plural(n, forms)` (`[one, other]` or `[one, few, many]`); `lvl(x, [[0,'ok'],[2,'warn'],[6,'bad']])`; `worst(states)` |
 | Layout | `page(no, title, body)`, `brief` (its label: `sheet(brief_label=...)` or `sitrep.BRIEF_LABEL`, `None` for none), `sub`, `ln(label, value, state, note)`, `item(text, state, wrap, tip)` (`tip` = hover text), `fx(w, html)` (a fixed-width column of `w` ch), `fxr(w, n)` (the same, right-aligned, for a number), `foot`, `raw(text)` for a file shown as written |
 | Tables | `cols([[w, 'title', 'r'], ...])` → `{hdr, row(values)}`: the header line and every row share one width spec; `w = 0` is free text |
 | Graphs | `flow(rows, edges, {w, lines})`: rows of rectangles, text inside, state under; edges drawn after render. Fill the box: `<div class="w2">` wraps a task or verdict over two lines, the whole of it in `tip` |
@@ -358,6 +402,11 @@ Rules:
   (`item(..., true)`), or else goes whole into the line's hover `tip`. An ellipsis is only a fallback
   for a narrow panel, never the only way to read the text.
 - **Lead with the fixed fields.** `fx()` columns first, then the free text (see §2).
+- **Dashboard variables reach a sheet through its query.** Return them as columns:
+  `SELECT '$schema' AS v_schema, ...`. The datasource substitutes them and the sheet reads
+  `table('A')[0].v_schema`. In PromQL, add them with `label_replace`. The harness substitutes them the
+  same way. `context.grafana.replaceVariables('$schema')` also works, in Grafana and in the harness
+  (fed from `--var`), but only for a sheet with no SQL to carry them.
 - **Never read `__name__` from a label.** To key a sheet by metric name, copy the name into a plain
   label in the query: `label_replace(..., "metric", "$1", "__name__", "(.*)")`, then read
   `labels.metric`.
@@ -368,11 +417,12 @@ Rules:
 |---|---|
 | `assets/briefing_lib.js` | The renderer, embedded into every sheet. Change it here, then regenerate. |
 | `assets/briefing.css` | The style: flat background, monospace, state colours. |
-| `scripts/sitrep.py` | Panel builders (`sheet`, `history`, `opened_closed`, `carry_rows`, `carry_panels`), `today()`, the layout checks, and the full-redraw record (`coverage`, `parity`). |
+| `scripts/sitrep.py` | Panel builders (`sheet`, `history`, `opened_closed`, `carry_rows`, `carry_panels`), `today()`, `q` and `sql` targets, the layout checks, the full-redraw record (`coverage`, `parity`), and `expect_original` for a hand-copied original. |
 | `scripts/sheet_harness.py` | Runs every sheet in `node` against live data, Grafana's proxy, a fixture or nothing, and prints it as text, before deploying (step 5). |
+| `scripts/export.py` | Writes a dashboard from Grafana to a file, the original for the generator (step 1). |
 | `scripts/deploy.py` | Posts the generated file to Grafana (step 6). |
 | `scripts/render_check.py` | The headless render plus the checks from step 6. |
-| `scripts/grafana_api.py` | The token reader and preflight the three scripts share. |
+| `scripts/grafana_api.py` | The token reader and preflight the scripts share. |
 | `examples/refactor_example.py` | A deploy page refactored end to end (keep mode). |
 | `examples/plain_overview_example.py` | A plain-language sheet over event telemetry, as a full redraw with its coverage map; its original and fixture beside it. |
 | `tests/test_sitrep.py` | Regression tests: `python3 -m unittest discover -s tests`. |

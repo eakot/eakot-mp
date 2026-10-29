@@ -27,6 +27,8 @@ EV = "ai_tool_event"
 KINDS = {"search": "questions to company systems instead of a manual search", "edit": "changes drafted by the tool"}
 
 src = json.loads(Path(sys.argv[1]).read_text())
+# The original is what Grafana shows: export.py writes it; a copy written by hand is checked before anything else.
+sitrep.expect_original(src, panels=4, queries=3, ends={(2, "A"): "count_over_time(ai_tool_event[14d]))"})
 panels = [sitrep.row(100, "Who uses AI tools, and how often?", 0)]
 panels.append(sitrep.sheet(
     1, "AI tools — the last 14 days",

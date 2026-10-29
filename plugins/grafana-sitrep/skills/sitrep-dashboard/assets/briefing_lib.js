@@ -72,6 +72,17 @@ const durCol = (s) => {
 const pct = (x, d) => (x == null ? '—' : `${(x * 100).toFixed(d == null ? 0 : d)}%`);
 const num = (x, d) => (x == null ? '—' : Number(x).toFixed(d || 0));
 const usd = (x) => (x == null ? '—' : x >= 100 ? `$${Math.round(x).toLocaleString('en-US')}` : `$${x.toFixed(2)}`);
+// A size in bytes, base 1024 (as pg_size_pretty and `du -h`; say so in the (i)): "512 B", "5.3 GB", "123 GB". One
+// decimal below 100. In a column: fxr(8, bytes(x)).
+const bytes = (x) => {
+  if (x == null || Number.isNaN(Number(x))) return '—';
+  const U = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  let v = Math.abs(Number(x)), i = 0;
+  while (v >= 1024 && i < U.length - 1) { v /= 1024; i++; }
+  let s = i === 0 || v >= 99.95 ? String(Math.round(v)) : v.toFixed(1);
+  if (Number(s) >= 1024 && i < U.length - 1) { s = '1.0'; i++; } // 1023.7 KB rounds to 1.0 MB, not "1024 KB"
+  return `${x < 0 ? '-' : ''}${s} ${U[i]}`;
+};
 // A whole number with the sheet's digit grouping (sheet(locale=...)): 12 345 in ru-RU, 12,345 in en-US.
 const LOCALE = /*LOCALE*/'en-US';
 const int = (x) => { if (x == null) return '—'; const r = Math.round(x); return (r === 0 ? 0 : r).toLocaleString(LOCALE); }; // never "-0"; NaN stays NaN
