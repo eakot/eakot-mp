@@ -65,6 +65,12 @@ def q(ref, expr, ds, legend=None, instant=True):
     return t
 
 
+def sql(ref, raw_sql, ds, fmt="table"):
+    """An SQL target (Postgres, MySQL): a sheet reads it with table(ref). Template variables in it are substituted
+    by Grafana, and by sheet_harness.py from --var, longest name first."""
+    return {"datasource": ds, "refId": ref, "rawSql": raw_sql, "format": fmt, "rawQuery": True, "editorMode": "code"}
+
+
 def registry(url, ds, root="repos"):
     """An Infinity target reading a live repo registry, {"repos": [{"label", "slug"}]}: refId RP, which the
     renderer prefers over the static map. One registry for every sheet means no repo map is kept in the page."""
@@ -81,6 +87,32 @@ def walk(panels):
     for p in panels:
         yield p
         yield from p.get("panels", [])
+
+
+def expect_original(src, *, panels=None, queries=None, ends=None):
+    """Refuse a transcribed original that does not match what Grafana shows. Use it when the JSON reached you as a
+    tool result (an MCP server, no export.py) and you wrote it to a file yourself: one dropped escape changes the
+    original that the generator reads and coverage() checks. `panels` and `queries` are the counts the page shows
+    (panels other than rows, the collapsed rows' children included; targets with an expr or rawSql); `ends` is
+    {(panel id, refId): "the last words of that query"}, copied from the tool result for every long query. A check
+    the generator itself makes is worth adding too (four queries that must share one CTE: assert it)."""
+    ps = [p for p in walk(src.get("panels", [])) if p.get("type") != "row"]
+    qs = {(p["id"], t.get("refId")): (t.get("rawSql") or t.get("expr") or "") for p in ps for t in p.get("targets", [])
+          if t.get("expr") or t.get("rawSql")}
+    errs = []
+    if panels is not None and len(ps) != panels:
+        errs.append(f"{len(ps)} panel(s), the page shows {panels}")
+    if queries is not None and len(qs) != queries:
+        errs.append(f"{len(qs)} quer(ies), the page shows {queries}")
+    for (pid, ref), tail in (ends or {}).items():
+        got = qs.get((pid, ref))
+        if got is None:
+            errs.append(f"panel {pid} has no query {ref}")
+        elif not got.rstrip().endswith(tail.strip()):
+            errs.append(f"panel {pid} query {ref} ends {got.rstrip()[-40:]!r}, expected {tail.strip()!r}")
+    if errs:
+        raise SystemExit("the original is not the page's:\n  " + "\n  ".join(errs))
+    return src
 
 
 _DECL = re.compile(r"(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)")

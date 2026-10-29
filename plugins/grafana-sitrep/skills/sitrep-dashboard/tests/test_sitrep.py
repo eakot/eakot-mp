@@ -22,12 +22,30 @@ import sheet_harness  # noqa: E402
 import sitrep  # noqa: E402
 
 VM = {"type": "prometheus", "uid": "vm"}
+PG = {"type": "grafana-postgresql-datasource", "uid": "pg"}
 HARNESS = str(SKILL / "scripts" / "sheet_harness.py")
 
 
 def mini_sheet(pid, y, body=None, **kw):
     body = body or "const v = one('A'); const html = page('01', 'T', brief(v == null ? 'none' : 'v ' + v) + ln('v', num(v), v == null ? 'nd' : 'ok'));"
     return sitrep.sheet(pid, f"sheet {pid}", "", {"h": 4, "w": 8, "x": 0, "y": y}, [sitrep.q("A", "up", VM)], body, ds=VM, **kw)
+
+
+def sql_sheet(pid, y, body, refs=("A",)):
+    return sitrep.sheet(pid, f"sql {pid}", "", {"h": 4, "w": 8, "x": 0, "y": y},
+                        [sitrep.sql(r, f"SELECT count(*) AS n FROM t_{r.lower()} WHERE s = '$schema_type' AND d = '$schema'", PG)
+                         for r in refs], body, ds=PG)
+
+
+# two tables: A's count drives one line, B's another; the verdict reads both
+TWO = ("const ta = table('A'), tb = table('B'); const na = ta.length ? ta[0].n : null, nb = tb.length ? tb[0].n : null;"
+       " const html = page('01', 'T', brief('x') + ln('from A', na == null ? '—' : int(na), na == null ? 'nd' : 'ok')"
+       " + ln('from B', nb == null ? '—' : int(nb), nb == null ? 'nd' : 'ok'));")
+
+
+def run_js(s):
+    js = sheet_harness.SHIM % "[]" + s["options"]["helpers"] + "\nprocess.stdout.write(String(OUT));\n"
+    return subprocess.run(["node", "-e", js], capture_output=True, text=True, check=True).stdout
 
 
 def collapsed(pid, y, kids):
@@ -168,6 +186,13 @@ class Sheet(unittest.TestCase):
         self.assertNotIn("-0", out)
         self.assertEqual(out.count("—"), 3)
 
+    def test_bytes(self):
+        s = mini_sheet(1, 0, "const html = page('01', 'T', brief([null, 0, 512, 1024, 1536, 1048064, 5.3 * 1024 ** 3, "
+                             "123 * 1024 ** 3, -2048].map(bytes).join('|')));")
+        self.assertIn("—|0 B|512 B|1.0 KB|1.5 KB|1.0 MB|5.3 GB|123 GB|-2.0 KB", run_js(s))
+        with self.assertRaises(SystemExit):  # a library name now: a page's own `bytes` is refused
+            mini_sheet(1, 0, "const bytes = 1; const html = page('01', 'T', brief('x'));")
+
     def test_int_keeps_nan_visible(self):
         s = mini_sheet(1, 0, "const html = page('01', 'T', brief(int(0 / 0) + '|' + int(-0.4) + '|' + int(1234)));")
         js = sheet_harness.SHIM % "[]" + s["options"]["helpers"] + "\nprocess.stdout.write(String(OUT));\n"
@@ -279,6 +304,79 @@ class Harness(unittest.TestCase):
         r = harness({"panels": [ok]}, "--empty")
         self.assertEqual(r.returncode, 0, r.stdout)
 
+    def test_sql_sheet_reads_a_table_fixture(self):
+        body = ("const t = table('A'); const n = t.length ? t[0].n : null;"
+                " const html = page('01', 'T', brief(n == null ? 'none' : 'tables ' + n + ' ' + esc(t[0].name)) + ln('n', n == null ? '—' : int(n), n == null ? 'nd' : 'ok'));")
+        d = {"panels": [sql_sheet(1, 0, body)]}
+        r = harness(d, "--fixture", fixture({"A": {"rows": [{"n": 7, "name": "<b>"}, {"n": None, "name": "x"}]}}))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("tables 7 <b>", r.stdout)
+        self.assertNotIn("skipped", r.stderr)
+        r = harness(d, "--fixture", fixture({"A": []}))
+        self.assertIn("none", r.stdout)
+        r = harness(d, "--fixture", fixture({"A": {"n": 1}}))
+        self.assertIn("a table is", r.stdout)
+        self.assertEqual(r.returncode, 1)
+
+    def test_table_frame_types(self):
+        f = sheet_harness.table_frame("A", [{"a": None, "b": "x"}, {"a": 2.5, "c": True}])[0]["fields"]
+        self.assertEqual([(x["name"], x["type"], x["values"]) for x in f],
+                         [("a", "number", [None, 2.5]), ("b", "string", ["x", None]), ("c", "boolean", [None, True])])
+
+    def test_partial_empty(self):
+        d = {"panels": [sql_sheet(1, 0, TWO, refs=("A", "B"))]}
+        fx = fixture({"A": {"rows": [{"n": 3}]}, "B": {"rows": [{"n": 0}]}})
+        r = harness(d, "--fixture", fx, "--empty", "A")
+        self.assertEqual(r.returncode, 1)  # B's line stays OK, and nobody said that is right
+        self.assertIn("OK on no data", r.stdout)
+        self.assertIn("from A", r.stdout)
+        r = harness(d, "--fixture", fx, "--empty", "A", "--allow-ok", "from B")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("allowed OK", r.stdout)
+        for typo in ("2:A", "Z", "A,Z"):  # names no target: never a clean pass
+            r = harness(d, "--fixture", fx, "--empty", typo, "--allow-ok", "from B")
+            self.assertEqual(r.returncode, 1, r.stdout)
+            self.assertIn("no target on a selected sheet", r.stdout)
+        r = harness(d, "--fixture", fx, "--empty", "1:A", "--allow-ok", "from B")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        r = harness(d, "--empty", "A")
+        self.assertEqual(r.returncode, 2)  # a partial empty is not a source
+        r = harness(d, "--empty", "--allow-ok", "x")
+        self.assertEqual(r.returncode, 2)
+
+    def test_partial_empty_catches_an_invented_number(self):
+        body = ("const ta = table('A'), tb = table('B'); const n = ta.length ? ta[0].n : 0;"
+                " const html = page('01', 'T', brief('x') + ln('people', `${int(n)} people`, 'idle') + ln('rows', `${int(tb[0].n)} rows`, 'idle'));")
+        d = {"panels": [sql_sheet(1, 0, body, refs=("A", "B"))]}
+        r = harness(d, "--fixture", fixture({"A": {"rows": [{"n": 3}]}, "B": {"rows": [{"n": 41}]}}), "--empty", "A")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("a number on no data, must read —: ['0 people']", r.stdout)  # B's "41 rows" is real, not flagged
+
+    def test_prefix_variables(self):
+        e = sheet_harness.subst("s = '$schema_type' AND d = '${schema}' AND $__timeFilter(t)",
+                                {"schema": "prod", "schema_type": "hive"}, builtins=False)
+        self.assertEqual(e, "s = 'hive' AND d = 'prod' AND $__timeFilter(t)")
+        # only the shorter one given: the longer name stays as it is, it does not become "prod_type"
+        self.assertEqual(sheet_harness.subst("$schema_type $schema", {"schema": "prod"}, builtins=False), "$schema_type prod")
+        self.assertEqual(sheet_harness.subst("$__range_s $__range", {}), "21600 6h")
+
+    def test_replace_variables_in_the_sheet(self):
+        body = "const html = page('01', 'T', brief(context.grafana.replaceVariables('$schema_type/${schema}/$schema'))); "
+        r = harness({"panels": [sql_sheet(1, 0, body)]}, "--fixture", fixture({"A": []}),
+                    "--var", "schema=prod", "--var", "schema_type=hive")
+        self.assertIn("hive/prod/prod", r.stdout)
+        r = harness({"panels": [sql_sheet(1, 0, body)]}, "--fixture", fixture({"A": []}), "--var", "schema=prod")
+        self.assertIn("$schema_type/prod/prod", r.stdout)
+
+    def test_dump_sql(self):
+        d = {"panels": [sql_sheet(1, 0, TWO, refs=("A", "B")), mini_sheet(2, 4)]}
+        with tempfile.TemporaryDirectory() as out:
+            r = harness(d, "--dump-sql", out, "--var", "schema=prod")
+            self.assertEqual(r.returncode, 0, r.stdout)
+            self.assertEqual(sorted(os.listdir(out)), ["1-A.sql", "1-B.sql"])
+            self.assertIn("d = 'prod'", Path(out, "1-A.sql").read_text())
+            self.assertIn("unset: ['$schema_type']", r.stdout)
+
     def test_builtins_are_substituted(self):
         e = sheet_harness.subst("x[$__range_s] @ ${__to} $__from $__interval_ms $job", {"job": "j"})
         self.assertNotIn("$", e)
@@ -339,8 +437,14 @@ class FakeGrafana(http.server.BaseHTTPRequestHandler):
             return self.reply(404, {})
         if self.path.startswith("/api/search"):
             return self.reply(200, [])
+        if self.path.startswith("/api/dashboards/uid/nope"):
+            return self.reply(404, {"message": "Dashboard not found"})
         if self.path.startswith("/api/dashboards/uid/"):
-            return self.reply(200, {"meta": {"folderUid": "fold1"}, "dashboard": {}})
+            return self.reply(200, {"meta": {"folderUid": "fold1"}, "dashboard": {
+                "uid": "u", "title": "Данные", "version": 9, "panels": [
+                    {"id": 1, "type": "table", "targets": [{"refId": "A", "rawSql": "SELECT '\\{' AS x"}]},
+                    {"id": 2, "type": "row", "collapsed": True, "panels": [
+                        {"id": 3, "type": "text", "targets": []}]}]}})
         if "/api/v1/query_range" in self.path:
             if "label_replace" in self.path or "bad%28%28" in self.path:
                 return self.reply(422, {"status": "error", "errorType": "422", "error": "duplicate output timeseries"})
@@ -352,6 +456,17 @@ class FakeGrafana(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         FakeGrafana.seen.append(("POST", self.path, body))
+        if self.path == "/api/ds/query":
+            q = body["queries"][0]
+            if "noref" in q["rawSql"]:
+                return self.reply(400, {"results": {}})
+            if "silent500" in q["rawSql"]:
+                return self.reply(200, {"results": {q["refId"]: {"status": 500}}})
+            if "bad" in q["rawSql"]:
+                return self.reply(400, {"results": {q["refId"]: {"error": "syntax error at or near \"bad\"", "status": 400}}})
+            return self.reply(200, {"results": {q["refId"]: {"status": 200, "frames": [{
+                "schema": {"fields": [{"name": "n", "type": "number"}, {"name": "name", "type": "string"}]},
+                "data": {"values": [[11], ["t1"]]}}]}}})
         self.reply(200, {"status": "success", "url": "/d/u/x", "version": 2})
 
 
@@ -445,6 +560,61 @@ class Live(unittest.TestCase):
         self.assertNotIn("Traceback", r.stderr)
         self.assertIn("reading the current dashboard", r.stderr)
 
+    def test_sql_through_grafana(self):
+        FakeGrafana.seen = []
+        body = ("const t = table('A'); const html = page('01', 'T', brief(t.length ? t[0].name + ' ' + t[0].n : 'none')"
+                " + ln('n', t.length ? int(t[0].n) : '—', t.length ? 'ok' : 'nd'));")
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump({"uid": "u", "panels": [sql_sheet(1, 0, body)]}, f)
+        r = self.run_env([sys.executable, HARNESS, f.name, "--grafana", self.url, "--var", "schema=prod",
+                          "--var", "schema_type=hive"], "glsa_good")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("t1 11", r.stdout)
+        q = [b for m, p, b in FakeGrafana.seen if p == "/api/ds/query"][0]["queries"][0]
+        self.assertIn("s = 'hive' AND d = 'prod'", q["rawSql"])  # not 'prod_type'
+        self.assertEqual(q["datasource"], {"uid": "pg"})
+        # the same SQL straight at a Prometheus URL is not run, and says so
+        r = subprocess.run([sys.executable, HARNESS, f.name, self.url], capture_output=True, text=True, timeout=60)
+        self.assertIn("UNCHECKED [1]", r.stdout)
+        self.assertIn("1 target(s) UNCHECKED", r.stdout)
+
+    def test_sql_rejected_by_the_datasource_fails(self):
+        s = sql_sheet(1, 0, TWO)
+        s["targets"][0]["rawSql"] = "SELECT bad"
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump({"uid": "u", "panels": [s]}, f)
+        r = self.run_env([sys.executable, HARNESS, f.name, "--grafana", self.url], "glsa_good")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn('target A FAILED: syntax error at or near "bad"', r.stdout)
+        for raw, msg in (("SELECT noref", "no result for refId A (HTTP 400)"), ("SELECT silent500", "HTTP 500, no reason given")):
+            s["targets"][0]["rawSql"] = raw
+            with open(f.name, "w") as g:
+                json.dump({"uid": "u", "panels": [s]}, g)
+            r = self.run_env([sys.executable, HARNESS, f.name, "--grafana", self.url], "glsa_good")
+            self.assertEqual(r.returncode, 1, r.stdout)
+            self.assertIn(msg, r.stdout)
+
+    def test_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp, "orig.json")
+            cmd = [sys.executable, str(SKILL / "scripts" / "export.py"), self.url + "/d/u/slug?kiosk", "u", str(out)]
+            r = self.run_env(cmd, "glsa_good")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("2 panel(s), 1 quer(ies)", r.stdout)
+            d = json.loads(out.read_text())
+            self.assertEqual(d["panels"][0]["targets"][0]["rawSql"], "SELECT '\\{' AS x")
+            self.assertIn("Данные", out.read_text())  # UTF-8, not \\u escapes
+            sitrep.expect_original(d, panels=2, queries=1, ends={(1, "A"): "AS x"})
+            with self.assertRaises(SystemExit):
+                sitrep.expect_original(d, ends={(1, "A"): "AS y"})
+            with self.assertRaises(SystemExit):
+                sitrep.expect_original(d, panels=3)
+            r = self.run_env(cmd, "glsa_good")
+            self.assertNotEqual(r.returncode, 0)
+            self.assertIn("--force", r.stderr)
+            r = self.run_env(cmd[:-2] + ["nope", str(Path(tmp, "x.json"))], "glsa_good")
+            self.assertIn("no such uid", r.stderr)
+
     def test_redirect_without_a_token_is_followed(self):
         req = urllib.request.Request(self.url + "/hop")
         with self.assertRaises(urllib.error.URLError) as e:  # followed to evil.invalid, which does not resolve
@@ -465,6 +635,11 @@ class Live(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("NOT a Grafana service-account token", r.stderr)
         self.assertNotIn("gateway-token", r.stderr)
+        self.assertIn("host tried:   127.0.0.1:", r.stderr)
+        self.assertIn("token from:   GRAFANA_TOKEN", r.stderr)
+        r = self.run_env([sys.executable, HARNESS, f.name, "--grafana", self.url], "glsa_other_instance")
+        self.assertIn("token prefix: glsa_", r.stderr)
+        self.assertIn("not that instance", r.stderr)
 
     def test_deploy_keeps_the_folder(self):
         FakeGrafana.seen = []

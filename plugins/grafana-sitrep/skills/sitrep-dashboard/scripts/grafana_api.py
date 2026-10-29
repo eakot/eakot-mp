@@ -37,6 +37,21 @@ def token():
     return t or None
 
 
+def token_source():
+    """Where token() read it from, for a message: the variable, or the file's path. Never the token."""
+    if os.environ.get("GRAFANA_TOKEN"):
+        return "GRAFANA_TOKEN"
+    if os.environ.get("GRAFANA_TOKEN_FILE"):
+        return f"GRAFANA_TOKEN_FILE={os.environ['GRAFANA_TOKEN_FILE']}"
+    return "no GRAFANA_TOKEN or GRAFANA_TOKEN_FILE"
+
+
+def token_class(tok):
+    """The token's prefix class, the only part of it a message may show."""
+    return "empty" if not tok else "glsa_ (a service-account token)" if tok.startswith("glsa_") else \
+        "other (NOT a Grafana service-account token)"
+
+
 def base_of(url):
     """https://grafana.example/sub/d/uid/slug?kiosk -> https://grafana.example/sub"""
     u = url.split("?", 1)[0]
@@ -76,10 +91,16 @@ def preflight(base, tok):
         call(base, "/api/search?limit=1", tok)
     except urllib.error.HTTPError as e:
         if e.code in (401, 403):
-            kind = "a service-account token" if tok.startswith("glsa_") else "NOT a Grafana service-account token"
+            host = base.split("/")[2] if "://" in base else base
+            glsa = tok.startswith("glsa_")
             raise SystemExit(
-                f"Grafana at {base} refused the token ({e.code}). It is {kind} (those start with glsa_). "
-                + ("Check that it is not expired or revoked, and its role." if tok.startswith("glsa_") else
+                f"Grafana at {base} refused the token ({e.code}).\n"
+                f"  host tried:   {host}\n"
+                f"  token from:   {token_source()}\n"
+                f"  token prefix: {token_class(tok)}\n"
+                + ("A glsa_ token is valid on the one Grafana it was created on: if this is not that instance, it is "
+                   "the wrong token, not a broken one. Otherwise check that it is not expired or revoked, and its role."
+                   if glsa else
                    "A token for a gateway in front of Grafana (an MCP server's, say) does not work here: create a "
                    "service account in Grafana (Administration > Service accounts) and pass its token."))
         raise SystemExit(f"Grafana at {base}: HTTP {e.code} on the preflight ({e.msg})")
