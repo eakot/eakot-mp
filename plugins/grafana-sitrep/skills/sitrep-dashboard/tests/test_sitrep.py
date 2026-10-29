@@ -333,7 +333,11 @@ class Harness(unittest.TestCase):
         r = harness(d, "--fixture", fx, "--empty", "A", "--allow-ok", "from B")
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertIn("allowed OK", r.stdout)
-        r = harness(d, "--fixture", fx, "--empty", "2:A")  # panel 2's A only: panel 1 keeps its data, nothing emptied
+        for typo in ("2:A", "Z", "A,Z"):  # names no target: never a clean pass
+            r = harness(d, "--fixture", fx, "--empty", typo, "--allow-ok", "from B")
+            self.assertEqual(r.returncode, 1, r.stdout)
+            self.assertIn("no target on a selected sheet", r.stdout)
+        r = harness(d, "--fixture", fx, "--empty", "1:A", "--allow-ok", "from B")
         self.assertEqual(r.returncode, 0, r.stdout)
         r = harness(d, "--empty", "A")
         self.assertEqual(r.returncode, 2)  # a partial empty is not a source
@@ -454,6 +458,10 @@ class FakeGrafana(http.server.BaseHTTPRequestHandler):
         FakeGrafana.seen.append(("POST", self.path, body))
         if self.path == "/api/ds/query":
             q = body["queries"][0]
+            if "noref" in q["rawSql"]:
+                return self.reply(400, {"results": {}})
+            if "silent500" in q["rawSql"]:
+                return self.reply(200, {"results": {q["refId"]: {"status": 500}}})
             if "bad" in q["rawSql"]:
                 return self.reply(400, {"results": {q["refId"]: {"error": "syntax error at or near \"bad\"", "status": 400}}})
             return self.reply(200, {"results": {q["refId"]: {"status": 200, "frames": [{
@@ -578,6 +586,13 @@ class Live(unittest.TestCase):
         r = self.run_env([sys.executable, HARNESS, f.name, "--grafana", self.url], "glsa_good")
         self.assertEqual(r.returncode, 1)
         self.assertIn('target A FAILED: syntax error at or near "bad"', r.stdout)
+        for raw, msg in (("SELECT noref", "no result for refId A (HTTP 400)"), ("SELECT silent500", "HTTP 500, no reason given")):
+            s["targets"][0]["rawSql"] = raw
+            with open(f.name, "w") as g:
+                json.dump({"uid": "u", "panels": [s]}, g)
+            r = self.run_env([sys.executable, HARNESS, f.name, "--grafana", self.url], "glsa_good")
+            self.assertEqual(r.returncode, 1, r.stdout)
+            self.assertIn(msg, r.stdout)
 
     def test_export(self):
         with tempfile.TemporaryDirectory() as tmp:

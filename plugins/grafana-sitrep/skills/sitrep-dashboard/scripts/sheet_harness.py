@@ -179,6 +179,7 @@ class Live:
         q = dict(target, rawSql=subst(target["rawSql"], self.vars, builtins=False),
                  datasource={"uid": subst(uid, self.vars)}, format=target.get("format") or "table")
         body = {"from": str(now_ms - RANGE_S * 1000), "to": str(now_ms), "queries": [q]}
+        failed = None
         try:
             d = grafana_api.call(self.grafana, "/api/ds/query", self.tok, body)
         except urllib.error.HTTPError as e:  # a rejected query: 400 with the datasource's reason in results
@@ -188,9 +189,14 @@ class Live:
                 raise RuntimeError(f"HTTP {e.code} {e.msg}") from None
             if not isinstance(d, dict) or "results" not in d:
                 raise RuntimeError(f"HTTP {e.code} {(d or {}).get('message') if isinstance(d, dict) else e.msg}") from None
-        res = (d.get("results") or {}).get(target["refId"]) or {}
-        if res.get("error"):
-            raise RuntimeError(res["error"])
+            failed = e.code
+        # a refused or failed query is never read as "no data": no answer for the refId, an error, or an HTTP
+        # error status with no reason given all fail the target
+        res = (d.get("results") or {}).get(target["refId"])
+        if not isinstance(res, dict):
+            raise RuntimeError(f"no result for refId {target['refId']}" + (f" (HTTP {failed})" if failed else ""))
+        if res.get("error") or failed or (res.get("status") or 200) >= 400:
+            raise RuntimeError(res.get("error") or f"HTTP {failed or res.get('status')}, no reason given")
         out = []
         for fr in res.get("frames") or []:
             vals = (fr.get("data") or {}).get("values") or []
@@ -272,10 +278,14 @@ class Empty:
     """Every target answers nothing, or (`refs`) only the named ones: "A" any panel's A, "7:A" panel 7's."""
 
     def __init__(self, src=None, refs=None):
-        self.src, self.refs = src, refs
+        self.src, self.refs, self.matched = src, refs, set()
 
     def emptied(self, panel, target):
-        return self.refs is None or target["refId"] in self.refs or f"{panel['id']}:{target['refId']}" in self.refs
+        if self.refs is None:
+            return True
+        hit = {target["refId"], f"{panel['id']}:{target['refId']}"} & self.refs
+        self.matched |= hit
+        return bool(hit)
 
     def frames(self, panel, target):
         return [] if self.emptied(panel, target) else self.src.frames(panel, target)
@@ -474,6 +484,9 @@ def main():
             src = Empty(src, {x.strip() for x in a.empty.split(",") if x.strip()})
     sheets = [p for p in panels if p.get("type") == SHEET]
     fails = sum(run_sheet(p, src, vars_, a.allow_ok) for p in sheets)
+    if partial and src.refs - src.matched:  # a typo in --empty must not pass as a clean empty run
+        print(f"FAIL --empty {sorted(src.refs - src.matched)}: no target on a selected sheet has that refId")
+        fails += 1
     charts = []
     if isinstance(src, Live) or (isinstance(src, Empty) and isinstance(src.src, Live)):
         charts = [p for p in panels if p.get("type") not in (SHEET, "row") and any(live(t) and not is_sql(t) for t in p.get("targets", []))]
