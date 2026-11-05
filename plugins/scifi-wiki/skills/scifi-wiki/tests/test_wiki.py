@@ -157,6 +157,12 @@ class Stage(unittest.TestCase):
         self.assertEqual(s.rewrite("![x](img/a.png)", "docs", 1), "![x](../media/docs/img/a.png)")
         self.assertTrue((self.site / "media" / "docs" / "img" / "a.png").exists())
 
+    def test_image_path_leaving_and_reentering_root_stays_in_media(self):
+        (self.site / "docs" / "img").mkdir()
+        (self.site / "docs" / "img" / "a.png").write_bytes(b"png")
+        s = wiki.Site(self.cfg)
+        self.assertEqual(s.rewrite("![x](../../site/docs/img/a.png)", "docs", 1), "![x](../media/docs/img/a.png)")
+
     def test_image_symlinked_out_of_root_is_not_copied(self):
         outside = Path(self.tmp.name) / "secret.png"
         outside.write_bytes(b"secret")

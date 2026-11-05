@@ -313,7 +313,7 @@ class Site:
         src = (self.root / resolved).resolve()
         if self.root.resolve() not in src.parents or not src.is_file():   # a symlink out of root is not published
             return target
-        rel = f"media/{resolved}"
+        rel = f"media/{src.relative_to(self.root.resolve()).as_posix()}"   # never a ../ path: it stays under media/
         if rel not in self.written:
             self.write(rel, src)
         return "../" * depth + rel
