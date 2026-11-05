@@ -111,7 +111,11 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("goals")
     b.add_argument("-o", "--out", required=True)
     args = ap.parse_args(argv)
-    data = page.load_json(args.goals)
+    try:
+        data = page.load_json(args.goals)
+    except ValueError as e:                             # bad JSON, NaN or Infinity
+        print(f"error: {args.goals}: {e}", file=sys.stderr)
+        return 1
     errors, warnings = check(data)
     for w in warnings:
         print(f"warn: {w}", file=sys.stderr)

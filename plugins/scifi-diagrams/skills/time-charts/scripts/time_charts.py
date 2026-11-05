@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -23,7 +24,7 @@ KINDS = {"line", "area", "bars", "step"}
 
 
 def _num(v: object) -> bool:
-    return isinstance(v, (int, float)) and not isinstance(v, bool)
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)   # 1e999 is inf
 
 
 def check(doc: object) -> tuple[list[str], list[str]]:
@@ -93,7 +94,11 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("doc")
     b.add_argument("-o", "--out", required=True)
     args = ap.parse_args(argv)
-    doc = page.load_json(args.doc)
+    try:
+        doc = page.load_json(args.doc)
+    except ValueError as e:                             # bad JSON, NaN or Infinity
+        print(f"error: {args.doc}: {e}", file=sys.stderr)
+        return 1
     errors, warnings = check(doc)
     for w in warnings:
         print(f"warn: {w}", file=sys.stderr)
