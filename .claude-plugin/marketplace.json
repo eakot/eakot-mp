@@ -13,9 +13,9 @@
       "description": "Refactor a Grafana dashboard into dense sitrep status sheets: a one-line verdict, every number with an OK/WARN/ACT tag, every git entity a link."
     },
     {
-      "name": "scifi-wiki",
-      "source": "./plugins/scifi-wiki",
-      "description": "Refactor markdown documents into a sci-fi wiki: one static Quarto site, a page per section, cards, a decision ledger, live PromQL charts and a SITREP briefing, derived from the sources."
+      "name": "scifi-diagrams",
+      "source": "./plugins/scifi-diagrams",
+      "description": "Diagram skills as self-contained sci-fi HTML pages: scifi-graph (a plan as an RPG skill tree with gains, dependencies and ≈cost, semantic zoom), goal-map (a star map of goal progress), time-charts (uPlot history with zoom)."
     }
   ]
 }

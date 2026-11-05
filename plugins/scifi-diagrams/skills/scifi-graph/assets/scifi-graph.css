@@ -1,0 +1,101 @@
+/* scifi-graph 1.0.0 — needs shared/theme.css first. */
+.sg { font-family: var(--mono); }
+.sg-hud { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.1rem; background: #0b1220ee; border: 1px solid var(--t1);
+  clip-path: var(--cut); padding: .55rem 1rem; margin-bottom: .4rem; font-size: .82rem; color: var(--dim); }
+.sg-title { font: 900 1rem var(--display); letter-spacing: .2em; color: var(--accent); text-transform: uppercase; }
+.sg-stat b { color: var(--ink); font-weight: 400; }
+.sg-chips { display: flex; flex-wrap: wrap; gap: .35rem; margin-left: auto; }
+.sg-notes { color: var(--dim); font-size: .75rem; margin: 0 0 .5rem .2rem; }
+.sg-main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: .8rem; }
+@media (max-width: 1000px) { .sg-main { grid-template-columns: 1fr; } }
+.sg-map { position: relative; height: min(80vh, 860px); background: radial-gradient(ellipse at center, #0f1a2b 0%, #070b14 75%);
+  border: 1px solid var(--line); clip-path: var(--cut); overflow: hidden; outline: none; }
+.sg-map:focus-visible { border-color: var(--glow); }
+.sg-svg { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; user-select: none; touch-action: none; }
+.sg-svg.is-panning { cursor: grabbing; }
+.sg-level { position: absolute; left: .8rem; bottom: .55rem; z-index: 2; color: var(--glow); font-size: .8rem; letter-spacing: .1em; pointer-events: none; }
+.sg-legend { position: absolute; right: .8rem; bottom: .55rem; z-index: 2; display: flex; flex-wrap: wrap; gap: .2rem .8rem; font-size: .7rem; color: var(--dim);
+  background: #070b14cc; padding: .2rem .5rem; pointer-events: none; }
+.sg-legend i { font-style: normal; margin-right: .25rem; }
+.sg-lg-edge.dim { opacity: .7; }
+
+/* bands: one topic branch each */
+.sg-band-bg { fill-opacity: .035; }
+.sg-band-label { font-family: var(--display); font-weight: 700; letter-spacing: .14em; fill: var(--ink); }
+.sg-band.is-dim, .sg-node.is-dim { opacity: .18; }
+
+/* regions */
+.sg-frame { fill: #0b1220; fill-opacity: .55; stroke-opacity: .45; stroke-width: 1.5; }
+.k-goal > .sg-frame { stroke-width: 2.5; stroke-opacity: .7; }
+.sg-cont > .sg-open { display: none; }
+.sg-cont.is-open > .sg-open { display: inline; }
+.sg-cont.is-open > .sg-sum { display: none; }
+.sg-sum { cursor: zoom-in; }
+.sg-sum-bg { fill: transparent; }
+.sg-s-head, .sg-h2, .sg-s-sub { fill: var(--dim); }
+.sg-s-title, .sg-h1 { fill: var(--ink); }
+.sg-h1 { font-family: var(--display); font-weight: 700; letter-spacing: .05em; }
+.sg-s-pts, .sg-pts { fill: #ffd27a; }
+.sg-s-gain, .sg-gain { fill: var(--ink); }
+.sg-bar { fill: #1d3150; }
+.sg-bar-fill { fill-opacity: .9; }
+.sg-pb { font-family: var(--display); font-weight: 900; letter-spacing: .16em; fill: var(--ink); }
+
+/* point B */
+.sg-star-box { fill: #0f1a2b; stroke-width: 2; }
+.sg-star { stroke-width: 2.5; filter: url(#sg-glow); }
+.st-unlocked > .sg-open > .sg-star-box, .st-unlocked > .sg-frame { stroke-opacity: 1; }
+
+/* tasks: state is a word and an icon as well as a look */
+.sg-leaf { cursor: pointer; }
+.sg-card { fill: #0f1a2b; stroke: #2a3d5c; stroke-width: 1.2; }
+.sg-l1 { fill: var(--ink); }
+.sg-l2 { fill: var(--ink); }
+.sg-l3 { fill: var(--dim); }
+.sg-word { fill: var(--dim); letter-spacing: .08em; }
+.st-unlocked > .sg-card { fill: #14263d; stroke: var(--tag-ok); stroke-opacity: .55; }
+.st-unlocked > .sg-l3 { fill: #a8e6b4; }
+.st-active > .sg-card { stroke: var(--glow); stroke-width: 2; stroke-dasharray: 6 4; animation: sg-run 1.6s linear infinite; }
+.st-available > .sg-card { stroke: #ffd27a; stroke-width: 1.6; }
+.st-locked > .sg-card { fill: #0b1220; }
+.st-locked > .sg-l1, .st-locked > .sg-l2 { fill: var(--dim); }
+.st-locked > .sg-stripe { fill-opacity: .35; }
+@keyframes sg-run { to { stroke-dashoffset: -20; } }
+@media (prefers-reduced-motion: reduce) { .st-active > .sg-card { animation: none; } }
+.sg-node:hover > .sg-card, .sg-node:hover > .sg-frame { stroke: var(--glow); }
+.sg-node.is-selected > .sg-card, .sg-node.is-selected > .sg-frame { stroke: var(--glow); stroke-width: 3; stroke-opacity: 1; }
+.sg-node:focus { outline: none; }
+.sg-node:focus-visible > .sg-card, .sg-node:focus-visible > .sg-frame { stroke: var(--glow); stroke-width: 3; }
+
+/* edges: lit when the prerequisite is done (the past), dashed while it is open (the future) */
+.sg-edge, .sg-flow { fill: none; stroke: #5c6f87; stroke-width: 1.6; stroke-dasharray: 5 5; stroke-opacity: .8; }
+.sg-edge.is-lit, .sg-flow.is-lit { stroke: var(--glow); stroke-dasharray: none; stroke-opacity: .75; }
+.sg-edge { stroke-width: 2.2; }
+.sg-flow { stroke-width: 1.1; stroke-opacity: .45; }
+.sg-ah { fill: var(--glow); }
+.sg-ah.dim { fill: #5c6f87; }
+
+/* tooltip + readout */
+.sg-tip { position: absolute; display: none; z-index: 3; pointer-events: none; max-width: 340px; background: #0b1220f2; border: 1px solid var(--glow);
+  padding: .4rem .6rem; font-size: .75rem; color: var(--dim); }
+.sg-tip-title { color: var(--ink); margin: .15rem 0; font-family: var(--body); }
+.sg-readout { background: #0b1220ee; border: 1px solid var(--line); clip-path: var(--cut); padding: .8rem 1rem; max-height: min(80vh, 860px); overflow: auto; font-size: .82rem; }
+.sg-readout-head { color: var(--accent); letter-spacing: .2em; font-size: .8rem; margin-bottom: .5rem; }
+.sg-hint { color: var(--dim); }
+.sg-ro-path { color: var(--dim); font-size: .75rem; margin-bottom: .3rem; }
+.sg-ro-path a { color: var(--dim); }
+.sg-ro-topic { color: var(--dim); font-size: .78rem; }
+.sg-ro-title { font: 600 1rem var(--body); color: var(--ink); margin: .35rem 0 .5rem; }
+.sg-ro-nums { color: var(--ink); margin: .35rem 0; }
+.sg-ro-sub { color: var(--accent); letter-spacing: .14em; font-size: .72rem; margin: .9rem 0 .3rem; }
+.sg-meter { height: 6px; background: #1d3150; }
+.sg-meter > div { height: 100%; }
+.sg-list, .sg-gains { list-style: none; padding: 0; margin: 0; }
+.sg-list li, .sg-gains li { padding: .18rem 0; border-bottom: 1px solid #1d315066; color: var(--ink); cursor: pointer; }
+.sg-gains li { cursor: default; color: #ffe2a8; }
+.sg-list li.st-unlocked > span { color: var(--tag-ok); }
+.sg-list li.st-locked { color: var(--dim); }
+.sg-ro-topic .st-unlocked { color: var(--tag-ok); }
+.sg-ro-topic .st-available { color: #ffd27a; }
+.sg-ro-topic .st-active { color: var(--glow); }
+@media (forced-colors: active) { .sg-card, .sg-frame { stroke: CanvasText; } .sg-edge, .sg-flow { stroke: CanvasText; } }

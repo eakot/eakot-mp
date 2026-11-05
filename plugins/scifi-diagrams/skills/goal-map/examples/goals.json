@@ -1,0 +1,515 @@
+{
+ "schema": "goal-map/1",
+ "title": "HELIX — goal map",
+ "generated": "2301-06-24 08:00Z",
+ "topics": [
+  {
+   "id": "life-support",
+   "label": "Life support"
+  },
+  {
+   "id": "propulsion",
+   "label": "Propulsion"
+  },
+  {
+   "id": "navigation",
+   "label": "Navigation"
+  },
+  {
+   "id": "crew",
+   "label": "Crew"
+  }
+ ],
+ "goals": [
+  {
+   "id": "101",
+   "label": "#101",
+   "title": "Scrubber duty cycle",
+   "topic": "life-support",
+   "state": "closed",
+   "total": 4,
+   "completed": 4,
+   "url": "https://example.org/helix/issues/101",
+   "kids": [
+    {
+     "id": "#201",
+     "title": "Audit cycle part 1",
+     "done": true,
+     "url": "https://example.org/helix/issues/201"
+    },
+    {
+     "id": "#202",
+     "title": "Fit cycle part 2",
+     "done": true,
+     "url": "https://example.org/helix/issues/202"
+    },
+    {
+     "id": "#203",
+     "title": "Audit cycle part 3",
+     "done": true,
+     "url": "https://example.org/helix/issues/203"
+    },
+    {
+     "id": "#204",
+     "title": "Audit cycle part 4",
+     "done": true,
+     "url": "https://example.org/helix/issues/204"
+    }
+   ]
+  },
+  {
+   "id": "102",
+   "label": "#102",
+   "title": "Automate the thermal loop",
+   "topic": "life-support",
+   "state": "open",
+   "total": 6,
+   "completed": 5,
+   "url": "https://example.org/helix/issues/102",
+   "kids": [
+    {
+     "id": "#205",
+     "title": "Fit loop part 1",
+     "done": true,
+     "url": "https://example.org/helix/issues/205"
+    },
+    {
+     "id": "#206",
+     "title": "Log loop part 2",
+     "done": true,
+     "url": "https://example.org/helix/issues/206"
+    },
+    {
+     "id": "#207",
+     "title": "Replace loop part 3",
+     "done": true,
+     "url": "https://example.org/helix/issues/207"
+    },
+    {
+     "id": "#208",
+     "title": "Test loop part 4",
+     "done": true,
+     "url": "https://example.org/helix/issues/208"
+    },
+    {
+     "id": "#209",
+     "title": "Fit loop part 5",
+     "done": true,
+     "url": "https://example.org/helix/issues/209"
+    },
+    {
+     "id": "#210",
+     "title": "Audit loop part 6",
+     "done": false,
+     "url": "https://example.org/helix/issues/210"
+    }
+   ]
+  },
+  {
+   "id": "103",
+   "label": "#103",
+   "title": "Water reclaimer overhaul",
+   "topic": "life-support",
+   "state": "open",
+   "total": 8,
+   "completed": 2,
+   "url": "https://example.org/helix/issues/103",
+   "kids": [
+    {
+     "id": "#211",
+     "title": "Inspect overhaul part 1",
+     "done": true,
+     "url": "https://example.org/helix/issues/211"
+    },
+    {
+     "id": "#212",
+     "title": "Log overhaul part 2",
+     "done": true,
+     "url": "https://example.org/helix/issues/212"
+    },
+    {
+     "id": "#213",
+     "title": "Test overhaul part 3",
+     "done": false,
+     "url": "https://example.org/helix/issues/213"
+    },
+    {
+     "id": "#214",
+     "title": "Install overhaul part 4",
+     "done": false,
+     "url": "https://example.org/helix/issues/214"
+    },
+    {
+     "id": "#215",
+     "title": "Audit overhaul part 5",
+     "done": false,
+     "url": "https://example.org/helix/issues/215"
+    },
+    {
+     "id": "#216",
+     "title": "Calibrate overhaul part 6",
+     "done": false,
+     "url": "https://example.org/helix/issues/216"
+    },
+    {
+     "id": "#217",
+     "title": "Test overhaul part 7",
+     "done": false,
+     "url": "https://example.org/helix/issues/217"
+    },
+    {
+     "id": "#218",
+     "title": "Install overhaul part 8",
+     "done": false,
+     "url": "https://example.org/helix/issues/218"
+    }
+   ]
+  },
+  {
+   "id": "110",
+   "label": "#110",
+   "title": "Ion drive retrofit",
+   "topic": "propulsion",
+   "state": "open",
+   "total": 9,
+   "completed": 2,
+   "url": "https://example.org/helix/issues/110",
+   "kids": [
+    {
+     "id": "#219",
+     "title": "Fit retrofit part 1",
+     "done": true,
+     "url": "https://example.org/helix/issues/219"
+    },
+    {
+     "id": "#220",
+     "title": "Patch retrofit part 2",
+     "done": true,
+     "url": "https://example.org/helix/issues/220"
+    },
+    {
+     "id": "#221",
+     "title": "Inspect retrofit part 3",
+     "done": false,
+     "url": "https://example.org/helix/issues/221"
+    },
+    {
+     "id": "#222",
+     "title": "Survey retrofit part 4",
+     "done": false,
+     "url": "https://example.org/helix/issues/222"
+    },
+    {
+     "id": "#223",
+     "title": "Log retrofit part 5",
+     "done": false,
+     "url": "https://example.org/helix/issues/223"
+    },
+    {
+     "id": "#224",
+     "title": "Drill retrofit part 6",
+     "done": false,
+     "url": "https://example.org/helix/issues/224"
+    },
+    {
+     "id": "#225",
+     "title": "Audit retrofit part 7",
+     "done": false,
+     "url": "https://example.org/helix/issues/225"
+    },
+    {
+     "id": "#226",
+     "title": "Inspect retrofit part 8",
+     "done": false,
+     "url": "https://example.org/helix/issues/226"
+    },
+    {
+     "id": "#227",
+     "title": "Patch retrofit part 9",
+     "done": false,
+     "url": "https://example.org/helix/issues/227"
+    }
+   ]
+  },
+  {
+   "id": "111",
+   "label": "#111",
+   "title": "Drive power bus to 2 MW",
+   "topic": "propulsion",
+   "state": "open",
+   "total": 4,
+   "completed": 1,
+   "url": "https://example.org/helix/issues/111",
+   "kids": [
+    {
+     "id": "#228",
+     "title": "Log mw part 1",
+     "done": true,
+     "url": "https://example.org/helix/issues/228"
+    },
+    {
+     "id": "#229",
+     "title": "Inspect mw part 2",
+     "done": false,
+     "url": "https://example.org/helix/issues/229"
+    },
+    {
+     "id": "#230",
+     "title": "Test mw part 3",
+     "done": false,
+     "url": "https://example.org/helix/issues/230"
+    },
+    {
+     "id": "#231",
+     "title": "Log mw part 4",
+     "done": false,
+     "url": "https://example.org/helix/issues/231"
+    }
+   ],
+   "parent": "110"
+  },
+  {
+   "id": "112",
+   "label": "#112",
+   "title": "Reaction-mass budget",
+   "topic": "propulsion",
+   "state": "open",
+   "total": 3,
+   "completed": 3,
+   "url": "https://example.org/helix/issues/112",
+   "kids": [
+    {
+     "id": "#232",
+     "title": "Survey budget part 1",
+     "done": true,
+     "url": "https://example.org/helix/issues/232"
+    },
+    {
+     "id": "#233",
+     "title": "Fit budget part 2",
+     "done": true,
+     "url": "https://example.org/helix/issues/233"
+    },
+    {
+     "id": "#234",
+     "title": "Install budget part 3",
+     "done": true,
+     "url": "https://example.org/helix/issues/234"
+    }
+   ]
+  },
+  {
+   "id": "120",
+   "label": "#120",
+   "title": "Star tracker navigation",
+   "topic": "navigation",
+   "state": "open",
+   "total": 7,
+   "completed": 1,
+   "url": "https://example.org/helix/issues/120",
+   "kids": [
+    {
+     "id": "#235",
+     "title": "Survey navigation part 1",
+     "done": true,
+     "url": "https://example.org/helix/issues/235"
+    },
+    {
+     "id": "#236",
+     "title": "Survey navigation part 2",
+     "done": false,
+     "url": "https://example.org/helix/issues/236"
+    },
+    {
+     "id": "#237",
+     "title": "Replace navigation part 3",
+     "done": false,
+     "url": "https://example.org/helix/issues/237"
+    },
+    {
+     "id": "#238",
+     "title": "Replace navigation part 4",
+     "done": false,
+     "url": "https://example.org/helix/issues/238"
+    },
+    {
+     "id": "#239",
+     "title": "Log navigation part 5",
+     "done": false,
+     "url": "https://example.org/helix/issues/239"
+    },
+    {
+     "id": "#240",
+     "title": "Survey navigation part 6",
+     "done": false,
+     "url": "https://example.org/helix/issues/240"
+    },
+    {
+     "id": "#241",
+     "title": "Audit navigation part 7",
+     "done": false,
+     "url": "https://example.org/helix/issues/241"
+    }
+   ]
+  },
+  {
+   "id": "121",
+   "label": "#121",
+   "title": "Chart the outer station approach",
+   "topic": "navigation",
+   "state": "open",
+   "total": 5,
+   "completed": 4,
+   "url": "https://example.org/helix/issues/121",
+   "kids": [
+    {
+     "id": "#242",
+     "title": "Document approach part 1",
+     "done": true,
+     "url": "https://example.org/helix/issues/242"
+    },
+    {
+     "id": "#243",
+     "title": "Audit approach part 2",
+     "done": true,
+     "url": "https://example.org/helix/issues/243"
+    },
+    {
+     "id": "#244",
+     "title": "Log approach part 3",
+     "done": true,
+     "url": "https://example.org/helix/issues/244"
+    },
+    {
+     "id": "#245",
+     "title": "Replace approach part 4",
+     "done": true,
+     "url": "https://example.org/helix/issues/245"
+    },
+    {
+     "id": "#246",
+     "title": "Fit approach part 5",
+     "done": false,
+     "url": "https://example.org/helix/issues/246"
+    }
+   ]
+  },
+  {
+   "id": "130",
+   "label": "#130",
+   "title": "Three watches instead of two",
+   "topic": "crew",
+   "state": "open",
+   "total": 3,
+   "completed": 1,
+   "url": "https://example.org/helix/issues/130",
+   "kids": [
+    {
+     "id": "#247",
+     "title": "Replace two part 1",
+     "done": true,
+     "url": "https://example.org/helix/issues/247"
+    },
+    {
+     "id": "#248",
+     "title": "Inspect two part 2",
+     "done": false,
+     "url": "https://example.org/helix/issues/248"
+    },
+    {
+     "id": "#249",
+     "title": "Calibrate two part 3",
+     "done": false,
+     "url": "https://example.org/helix/issues/249"
+    }
+   ]
+  },
+  {
+   "id": "131",
+   "label": "#131",
+   "title": "Station training for everyone",
+   "topic": "crew",
+   "state": "open",
+   "total": 12,
+   "completed": 7,
+   "url": "https://example.org/helix/issues/131",
+   "kids": [
+    {
+     "id": "#250",
+     "title": "Audit everyone part 1",
+     "done": true,
+     "url": "https://example.org/helix/issues/250"
+    },
+    {
+     "id": "#251",
+     "title": "Survey everyone part 2",
+     "done": true,
+     "url": "https://example.org/helix/issues/251"
+    },
+    {
+     "id": "#252",
+     "title": "Inspect everyone part 3",
+     "done": true,
+     "url": "https://example.org/helix/issues/252"
+    },
+    {
+     "id": "#253",
+     "title": "Install everyone part 4",
+     "done": true,
+     "url": "https://example.org/helix/issues/253"
+    },
+    {
+     "id": "#254",
+     "title": "Audit everyone part 5",
+     "done": true,
+     "url": "https://example.org/helix/issues/254"
+    },
+    {
+     "id": "#255",
+     "title": "Inspect everyone part 6",
+     "done": true,
+     "url": "https://example.org/helix/issues/255"
+    },
+    {
+     "id": "#256",
+     "title": "Calibrate everyone part 7",
+     "done": true,
+     "url": "https://example.org/helix/issues/256"
+    },
+    {
+     "id": "#257",
+     "title": "Drill everyone part 8",
+     "done": false,
+     "url": "https://example.org/helix/issues/257"
+    },
+    {
+     "id": "#258",
+     "title": "Fit everyone part 9",
+     "done": false,
+     "url": "https://example.org/helix/issues/258"
+    },
+    {
+     "id": "#259",
+     "title": "Install everyone part 10",
+     "done": false,
+     "url": "https://example.org/helix/issues/259"
+    },
+    {
+     "id": "#260",
+     "title": "Patch everyone part 11",
+     "done": false,
+     "url": "https://example.org/helix/issues/260"
+    },
+    {
+     "id": "#261",
+     "title": "Calibrate everyone part 12",
+     "done": false,
+     "url": "https://example.org/helix/issues/261"
+    }
+   ]
+  }
+ ],
+ "notes": [
+  "Example data: a fictional ship's refit. A goal is a tracking issue; its sub-issues are its kids."
+ ]
+}
