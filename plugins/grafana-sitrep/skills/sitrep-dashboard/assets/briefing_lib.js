@@ -115,16 +115,57 @@ const fx = (w, html) => `<span class="fx dim" style="min-width:${w}ch">${html}</
 // the last digits line up like durCol's. Not dim: in a table the numbers are the point. `v` is plain TEXT (a number,
 // int(n), durCol(s)), escaped here, unlike fx()'s html.
 const fxr = (w, v) => `<span class="fx fxr" style="min-width:${w}ch">${esc((v == null ? '—' : String(v)).padStart(w, FIG))}</span>`;
-// A table: one width spec for the header and every row, so they cannot drift apart.
-//   const T = cols([[6, 'calls', 'r'], [24, 'tool'], [0, 'last error']]);   w = 0: free text, no fixed width
-//   T.hdr + rows.map((r) => item(T.row([int(r.calls), esc(r.tool), linkify(r.err)]), r.state)).join('')
-// Left-aligned cells are HTML, escaped by the caller, as with fx(); right-aligned ('r') cells are text, as with fxr().
-const cols = (spec) => {
-  const cell = ([w, , al], v, i) => (v == null ? (w ? (al === 'r' ? fxr(w, null) : fx(w, '—')) : '—') : al === 'r' ? (w ? fxr(w, v) : esc(v)) : w ? fx(w, v) : String(v)) + (i < spec.length - 1 ? ' ' : '');
+// A TABLE inside a contents box: the one way to put columns on a sheet. The title is its own sub() line; the
+// column names are the header row, drawn from the same width spec as every row, so the two cannot drift apart.
+//   const T = cols([[24, 'tool'], [6, 'calls', 'r'], [9, 'p95', 'r'], [0, 'client']], { tag: true });
+//   sub('airflow — 754 calls') + T.hdr + list.map((r) => T.line([esc(r.tool), int(r.calls), durCol(r.p95), esc(r.client)], r.state)).join('')
+// w > 0: a fixed column of w ch, widened to fit its title. A left cell is clipped with an ellipsis (whole on hover),
+//   so a long value never pushes the columns after it; a right ('r') cell, a number, is never clipped: size w to the
+//   longest value.
+// w = 0: free text, the LAST column only: a free column in the middle moves every column after it, so cols() throws.
+// opt.tag: the state tag (OK, WARN, ...) gets its own column at the right edge, the same on every line.
+// Every cell has one font size in the header and the rows, so a ch is one width everywhere, and cells are joined by
+// a space of the line's font, the same in both: a gap that a full cell cannot close. Left cells are HTML, escaped by
+// the caller, as with fx(); right cells are text, as with fxr(). T.line(values, state, tip) is the whole line;
+// T.row(values) is only its cells, for item().
+// A ch is a digit of the sheet's font, Share Tech Mono, which has no Cyrillic (nor Greek, CJK, ...): those letters
+// come from a fallback font and are up to 1.15 ch wide. `chW(text)` is the width text needs, in ch.
+const CH_WIDE = 1.15;
+const chW = (text) => {
+  const t = [...String(text)];
+  return Math.ceil(t.length * (t.some((c) => { const n = c.codePointAt(0); return n > 0x24f && (n < 0x2000 || n > 0x206f); }) ? CH_WIDE : 1));
+};
+const cols = (spec, opt) => {
+  const free = spec.findIndex(([w]) => !w);
+  if (free >= 0 && free < spec.length - 1) throw new Error(`cols(): column ${free + 1} (${spec[free][1]}) has w = 0; only the last column may be free text`);
+  // the one width spec: a title never clips, and the header and the rows read the same widths
+  const S = spec.map(([w, title, al]) => [w ? Math.max(w, chW(title)) : 0, title, al]);
+  const tag = !!(opt && opt.tag);
+  const plain = (h) => String(h).replace(/<[^>]*>/g, ''); // still escaped: fit for an attribute
+  // clip = a left cell: a fixed width, an ellipsis, and the whole text on hover when it may be cut
+  const box = (w, cls, h, clip) => {
+    const tip = clip && chW(plain(h).replace(/&[^;\s]+;/g, '_')) > w ? ` title="${plain(h)}"` : '';
+    return `<span class="tc${clip ? ' tcl' : ''}${cls}" style="${clip ? 'width' : 'min-width'}:${w}ch"${tip}>${h}</span>`;
+  };
+  const lead = new RegExp(`^${FIG}+`);
+  const cell = ([w, , al], v) => {
+    if (al === 'r') {
+      // TEXT, escaped here. No figure-space padding: text-align does it, and a padding glyph from a fallback font
+      // could be wider than a ch and push the cell
+      const t = esc(v == null ? '—' : String(v).replace(lead, ''));
+      return w ? box(w, ' tcr', t) : `<span class="tc tf">${t}</span>`;
+    }
+    const h = v == null ? '—' : String(v);
+    return w ? box(w, '', h, true) : `<span class="tc tf">${h}</span>`;
+  };
+  // a title is text: escaped here; its cell is as wide as the column's, so it sits over it
+  const head = ([w, title, al]) => (w ? box(w, al === 'r' ? ' tcr' : '', esc(title), true) : `<span class="tc tf">${esc(title)}</span>`);
+  const row = (values) => S.map((c, i) => cell(c, values[i])).join(' ');
   return {
-    // a title is text: an 'r' cell escapes its own (any width), the others take html, so escape it here for those only
-    hdr: `<div class="it ch">${spec.map((c, i) => cell(c, c[2] === 'r' ? c[1] : esc(c[1]), i)).join('')}</div>`,
-    row: (values) => spec.map((c, i) => cell(c, values[i], i)).join(''),
+    hdr: `<div class="it ch${tag ? ' tl' : ''}">${S.map(head).join(' ')}</div>`,
+    row,
+    line: (values, state, tip) => `<div class="it${tag ? ' tl' : ''} s-${state || 'idle'}"${tip ? ` title="${esc(tip)}"` : ''}>` +
+      row(values) + (tag ? ` <span class="tg">${TAG[state || 'idle']}</span>` : '') + '</div>',
   };
 };
 // The verdict line. Its label is the sheet's (sheet(brief_label=...)); null drops it, and the yellow rule on the left

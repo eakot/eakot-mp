@@ -107,6 +107,28 @@ pad it, so "22 h" and " 5 h" end at the same column. A duration in a column is `
 units, each padded to two places with a figure space, right-aligned to 9 characters); `dur(s)` is
 for a value inside a sentence.
 
+**Q: "Which number is which column?"**
+**A:** Any list whose lines have more than one value is a **table**, and a table is `cols()`, never
+`fx()` calls joined by hand. The sub-head says what the table is (`sub('airflow — 754 calls')`); the
+column names are **not** in it, they are the header row `T.hdr`, drawn from the same width spec as the
+rows, so each name sits over its column. Each line is `T.line(values, state)`:
+
+```js
+const T = cols([[24, 'tool'], [6, 'calls', 'r'], [6, 'errors', 'r'], [9, 'p95', 'r'], [0, 'client']], { tag: true });
+sub(`airflow — ${int(n)} calls`) + T.hdr + list.map((r) =>
+  T.line([esc(r.tool), int(r.calls), pct(r.err), durCol(r.p95), esc(r.client)], r.state)).join('')
+```
+
+Every fixed column has a width; a free column (`w = 0`) can only be the last, and `cols()` throws on
+one in the middle, because its width would move every column after it. Cells are joined by a gap that
+a full cell cannot close, so `105` and `19 h 18 m` never read as `10519 h 18 m`. `{ tag: true }` gives
+the state tag its own column at the right edge. A left cell (a name) is clipped with an ellipsis and
+shows whole on hover, so a long name never pushes the columns after it; a right cell (`'r'`, a
+number) is never clipped, so give it the width of its longest value. A column is widened to fit its
+title. Text in Cyrillic (or any script the sheet's font lacks) is drawn by a fallback font about
+1.15 ch per letter: give such a column 1.15 × its longest value. `T.row(values)` is the same cells
+without the line, for `item(T.row(...), state, wrap, tip)`.
+
 **Q: "What depends on what, and where is it stuck?"**
 **A:** A graph view is rows of **rectangles**, drawn by `flow(rows, edges)`: one row per lane or
 queue, its nodes in their real order left to right. The text sits *inside* the box, fixed fields
@@ -388,7 +410,7 @@ invisible here"). An unnamed gap reads as green.
 | Links | `repoA`, `prA`, `commitA`, `fileA`, `wfA`, `refA`, `linkify(text, repo)` |
 | Values | `dur` (inline), `durCol` (a fixed-width column), `pct`, `num`, `usd`, `bytes` (base 1024: `5.3 GB`; say so in the (i); in a column `fxr(8, bytes(x))`), `int` (grouped digits, the sheet's `locale`), `plural(n, forms)` (`[one, other]` or `[one, few, many]`); `lvl(x, [[0,'ok'],[2,'warn'],[6,'bad']])`; `worst(states)` |
 | Layout | `page(no, title, body)`, `brief` (its label: `sheet(brief_label=...)` or `sitrep.BRIEF_LABEL`, `None` for none), `sub`, `ln(label, value, state, note)`, `item(text, state, wrap, tip)` (`tip` = hover text), `fx(w, html)` (a fixed-width column of `w` ch), `fxr(w, n)` (the same, right-aligned, for a number), `foot`, `raw(text)` for a file shown as written |
-| Tables | `cols([[w, 'title', 'r'], ...])` → `{hdr, row(values)}`: the header line and every row share one width spec; `w = 0` is free text |
+| Tables | `cols([[w, 'title', 'r'], ...], {tag})` → `{hdr, line(values, state, tip), row(values)}`: the header row and every line share one width spec; `w = 0` is free text, last column only; `tag: true` puts the state tag in its own column. The title goes in `sub()`, the column names only in `hdr` (§2) |
 | Graphs | `flow(rows, edges, {w, lines})`: rows of rectangles, text inside, state under; edges drawn after render. Fill the box: `<div class="w2">` wraps a task or verdict over two lines, the whole of it in `tip` |
 | Columns | `<div class="cols">…</div>` |
 
@@ -405,6 +427,8 @@ Rules:
   (`item(..., true)`), or else goes whole into the line's hover `tip`. An ellipsis is only a fallback
   for a narrow panel, never the only way to read the text.
 - **Lead with the fixed fields.** `fx()` columns first, then the free text (see §2).
+- **A list of several values per line is a `cols()` table.** Title in `sub()`, names in `T.hdr`,
+  lines from `T.line()`. Never list column names in the sub-head (`▸ people — 12: days · calls`).
 - **Dashboard variables reach a sheet through its query.** Return them as columns:
   `SELECT '$schema' AS v_schema, ...`. The datasource substitutes them and the sheet reads
   `table('A')[0].v_schema`. In PromQL, add them with `label_replace`. The harness substitutes them the

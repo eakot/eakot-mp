@@ -335,7 +335,7 @@ def render(p, series, probe=False, vars_=None):
 def values(markup):
     """The value of every contents line and every right-aligned cell, as text."""
     return [html.unescape(re.sub(r"<[^>]*>", "", v)) for v in re.findall(
-        r'<span class="(?:v|fx fxr)"[^>]*>(.*?)</span>', markup)]
+        r'<span class="(?:v|fx fxr|tc tcr)"[^>]*>(.*?)</span>', markup)]
 
 
 def run_sheet(p, src, vars_=None, allow_ok=()):
@@ -363,7 +363,9 @@ def run_sheet(p, src, vars_=None, allow_ok=()):
     r = render(p, series, vars_=vars_)
     print(f"── [{p['id']}] {p['title']}")
     if r.returncode:
-        print("FAIL helper threw:", r.stderr.strip().splitlines()[-1] if r.stderr.strip() else r.returncode)
+        # the error line, not node's closing "Node.js v24..." banner
+        err = [x for x in r.stderr.strip().splitlines() if re.match(r"\w*Error\b", x)] or r.stderr.strip().splitlines()[-1:]
+        print("FAIL helper threw:", err[0] if err else r.returncode)
         return fails + 1
     out = text(r.stdout)
     print(out + "\n")
