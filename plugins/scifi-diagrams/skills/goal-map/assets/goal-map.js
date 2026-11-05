@@ -1,4 +1,4 @@
-/* goal-map 1.0.0 — goals as a pan/zoom star map (schema goal-map/1). MIT, no dependencies.
+/* goal-map 1.0.1 — goals as a pan/zoom star map (schema goal-map/1). MIT, no dependencies.
 
      GoalMap.render(hostElement, data)   draws the map, the HUD, the readout and the table view
      GoalMap.prepare(data)               the pure half (topics, progress, layout), usable from Node
@@ -11,7 +11,7 @@
   if (typeof module === "object" && module.exports) module.exports = api; else root.GoalMap = api;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
-  const VERSION = "1.0.0";
+  const VERSION = "1.0.1";
   const SLOTS = 6;
   const WORLD = 1320, R_CORE = 70, R_IN = 120, R_OUT = 500;
 

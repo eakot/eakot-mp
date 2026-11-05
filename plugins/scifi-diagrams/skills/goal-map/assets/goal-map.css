@@ -1,4 +1,4 @@
-/* goal-map 1.0.0 — needs shared/theme.css first. */
+/* goal-map 1.0.1 — needs shared/theme.css first. */
 .gm { font-family: var(--mono); }
 .gm-hud { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; background: #0b1220ee; border: 1px solid var(--t1);
   clip-path: var(--cut); padding: .55rem 1rem; margin-bottom: .8rem; box-shadow: inset 0 0 40px #1aa3d122; }
