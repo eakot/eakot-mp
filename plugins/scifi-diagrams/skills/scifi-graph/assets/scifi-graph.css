@@ -1,4 +1,4 @@
-/* scifi-graph 1.0.0 — needs shared/theme.css first. */
+/* scifi-graph 1.0.1 — needs shared/theme.css first. */
 .sg { font-family: var(--mono); }
 .sg-hud { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.1rem; background: #0b1220ee; border: 1px solid var(--t1);
   clip-path: var(--cut); padding: .55rem 1rem; margin-bottom: .4rem; font-size: .82rem; color: var(--dim); }

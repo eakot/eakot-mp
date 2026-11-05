@@ -138,7 +138,7 @@
       ${(data.notes || []).length ? `<div class="gm-notes">${data.notes.map(s => `<div>${esc(s)}</div>`).join("")}</div>` : ""}
       <div class="gm-main"><div class="gm-map" tabindex="0" aria-label="Goal map. Drag to pan, wheel or pinch to zoom, double-click to fly in, 0 to reset.">
         <div class="gm-canvas"></div><span class="gm-zoom"></span><div class="gm-tip" role="tooltip"></div></div>
-        <aside class="gm-readout" aria-label="Goal readout"><div class="gm-readout-head">READOUT</div><div class="gm-readout-body"></div></aside></div>
+        <div class="gm-readout" role="complementary" aria-label="Goal readout"><div class="gm-readout-head">READOUT</div><div class="gm-readout-body"></div></div></div>
       <details class="sd-table"><summary>TABLE VIEW · ${goals.length} goals</summary><div class="gm-table-body"></div></details>`;
     const $ = s => host.querySelector(s);
     const box = $(".gm-canvas");
