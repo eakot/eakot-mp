@@ -23,7 +23,10 @@
   const STAR_W = 280, BAND_GAP = 90, LEGIBLE_PX = 8;
 
   // ---- the pure half -------------------------------------------------------------------------------------------
-  const num = v => (typeof v === "number" && isFinite(v) ? v : null);
+  const num = v => (typeof v === "number" && isFinite(v) && v >= 0 ? v : null);   // a bad number is N/D, never 0
+  const str = v => (typeof v === "string" ? v : v == null ? "" : String(v));
+  const strList = v => (Array.isArray(v) ? v.filter(x => typeof x === "string") : []);
+  const MAX_DEPTH = 32;
 
   function parseGain(text) {
     const m = /^\s*\+(\d+(?:\.\d+)?)\s*/.exec(text);
@@ -52,27 +55,51 @@
   }
 
   function prepare(graph) {
-    const g = graph || {};
-    const topicIds = (g.topics || []).map(t => t.id);
-    const topicLabel = new Map((g.topics || []).map(t => [t.id, t.label || t.id]));
+    // Whatever arrives, nothing below throws: anything malformed is dropped or shown as N/D (check reports it).
+    const g = graph && typeof graph === "object" ? graph : {};
+    const list = v => (Array.isArray(v) ? v.filter(x => x && typeof x === "object") : []);
+    const topics = list(g.topics).filter(t => typeof t.id === "string");
+    const topicIds = topics.map(t => t.id);
+    const topicLabel = new Map(topics.map(t => [t.id, str(t.label) || t.id]));
     const nodes = new Map();
-    for (const raw of g.nodes || []) {
-      if (!raw || raw.id == null || nodes.has(String(raw.id))) continue;
-      nodes.set(String(raw.id), Object.assign({}, raw, { id: String(raw.id), kids: [], pre: [], post: [], up: null }));
+    for (const raw of list(g.nodes)) {
+      if (raw.id == null || typeof raw.id === "object" || nodes.has(String(raw.id))) continue;
+      const cost = raw.cost && typeof raw.cost === "object" ? raw.cost : null;
+      nodes.set(String(raw.id), Object.assign({}, raw, {
+        id: String(raw.id), kind: ["goal", "epic", "task"].includes(raw.kind) ? raw.kind : "task",
+        state: ["done", "active", "open"].includes(raw.state) ? raw.state : "open", title: str(raw.title), label: str(raw.label), status: str(raw.status), url: str(raw.url),
+        topic: typeof raw.topic === "string" ? raw.topic : "", parent: typeof raw.parent === "string" ? raw.parent : null,
+        closed: str(raw.closed), cost, gains: strList(raw.gains), decides: strList(raw.decides),
+        kids: [], pre: [], post: [], up: null }));
+    }
+    // A node on a parent loop, or hanging off one, keeps no parent. One memoised walk per chain: linear in nodes.
+    const onLoop = new Map();
+    for (const n of nodes.values()) {
+      const path = [], at = new Set();
+      let a = n;
+      while (a && !onLoop.has(a) && !at.has(a)) { path.push(a); at.add(a); a = a.parent != null ? nodes.get(a.parent) : null; }
+      const bad = a ? (at.has(a) ? true : onLoop.get(a)) : false;
+      for (const x of path) onLoop.set(x, bad);
     }
     for (const n of nodes.values()) {
-      const p = n.parent != null ? nodes.get(String(n.parent)) : null;
-      // a parent that would make a loop is dropped rather than looping the layout
-      let a = p, loop = false;
-      const seen = new Set();
-      while (a) {
-        if (a === n || seen.has(a)) { loop = true; break; }      // n on a loop, or hanging off someone else's
-        seen.add(a); a = a.parent != null ? nodes.get(String(a.parent)) : null;
-      }
-      if (p && !loop) { n.up = p; p.kids.push(n); }
+      const p = n.parent != null ? nodes.get(n.parent) : null;
+      if (p && !onLoop.get(n)) { n.up = p; p.kids.push(n); }
     }
+    // the layout recurses once per level: past MAX_DEPTH a subtree is drawn as its own top region instead
+    const depth = new Map();
+    const depthOf = n => {                            // iterative, memoised: a 20,000-deep chain is linear
+      const path = [];
+      let a = n;
+      while (a && !depth.has(a)) { path.push(a); a = a.up; }
+      let d = a ? depth.get(a) : -1;
+      for (let i = path.length - 1; i >= 0; i--) depth.set(path[i], ++d);
+      return depth.get(n);
+    };
+    const cut = [...nodes.values()].filter(n => { const d = depthOf(n); return d > 0 && d % (MAX_DEPTH + 1) === 0; });
+    for (const n of cut) { const p = n.up; p.kids.splice(p.kids.indexOf(n), 1); n.up = null; }
     const edges = [];
-    for (const e of g.edges || []) {
+    for (const e of list(g.edges)) {
+      if (typeof e.from === "object" || typeof e.to === "object") continue;
       const a = nodes.get(String(e.from)), b = nodes.get(String(e.to));
       if (!a || !b || a === b) continue;
       edges.push({ from: a, to: b, kind: e.kind || "needs" });
@@ -124,7 +151,7 @@
         r.leaves += q.leaves; r.doneLeaves += q.doneLeaves;
       }
       n.roll = r;
-      n.gainList = (n.gains || []).map(parseGain);
+      n.gainList = n.gains.map(parseGain);
       n.points = n.gainList.reduce((a, x) => a + x.weight, 0);
     };
     tops.forEach(roll);
@@ -291,7 +318,8 @@
   };
   const pctOf = n => (n.roll.leaves ? Math.round((100 * n.roll.doneLeaves) / n.roll.leaves) : n.tree === "unlocked" ? 100 : 0);
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const safeUrl = u => (/^(https?:)?\/\//i.test(String(u || "")) || /^[./#]/.test(String(u || "")) ? String(u) : "");
+  // http(s), or a same-origin path; `//host` and `javascript:` are dropped (the same rule as page.SAFE_URL)
+  const safeUrl = u => (/^(https?:\/\/|\/(?!\/)|\.\.?\/|#)/i.test(String(u || "")) ? String(u) : "");
 
   // ---- the browser half ----------------------------------------------------------------------------------------
   const NS = "http://www.w3.org/2000/svg";

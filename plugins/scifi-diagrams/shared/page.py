@@ -12,6 +12,18 @@ from pathlib import Path
 
 SHARED = Path(__file__).resolve().parent
 
+#: http(s), or a same-origin path. A protocol-relative `//host/…` leaves the origin, so it is not "relative" here.
+SAFE_URL = re.compile(r"^(https?://|/(?!/)|\./|\.\./|#)", re.I)
+
+
+def _no_constant(name: str) -> float:
+    raise ValueError(f"{name} is not a number in JSON; leave a missing number out")
+
+
+def load_json(path: str | Path) -> object:
+    """JSON as the browser's JSON.parse reads it: NaN and Infinity are refused, not passed through."""
+    return json.loads(Path(path).read_text(encoding="utf-8"), parse_constant=_no_constant)
+
 
 def theme_css() -> str:
     """The shared theme with every `url(fonts/…)` replaced by its bytes."""
@@ -26,7 +38,7 @@ def theme_css() -> str:
 
 def json_script(data: object, element_id: str) -> str:
     """JSON in a <script> element that no string inside it can close early."""
-    text = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    text = json.dumps(data, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     text = text.replace("<", "\\u003c")    # no "</script", no "<!--", no "<script" survives
     return f'<script type="application/json" id="{element_id}">{text}</script>'
 

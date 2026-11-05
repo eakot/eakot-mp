@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import math
 import re
 import statistics
 import sys
@@ -64,15 +65,18 @@ def check(graph: object) -> tuple[list[str], list[str]]:
         if not isinstance(n.get("title", ""), str):
             err.append(f"{where}: title must be a string")
         url = n.get("url")
-        if url is not None and not re.match(r"^(https?://|/|\./|\.\./|#)", str(url)):
-            err.append(f"{where}: url must be http(s) or relative, got {url!r}")
+        if url is not None and not (isinstance(url, str) and page.SAFE_URL.match(url)):
+            err.append(f"{where}: url must be http(s) or a same-origin path, got {url!r}")
+        for key in ("parent", "topic", "label", "status", "closed"):
+            if n.get(key) is not None and not isinstance(n[key], str):
+                err.append(f"{where}: {key} must be a string")
         cost = n.get("cost")
         if cost is not None:
             if not isinstance(cost, dict) or set(cost) - COST_KEYS:
                 err.append(f"{where}: cost takes only {sorted(COST_KEYS)}")
             else:
                 for k, v in cost.items():
-                    if not isinstance(v, (int, float)) or isinstance(v, bool) or v < 0:
+                    if not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v) or v < 0:
                         err.append(f"{where}: cost.{k} must be a number ≥ 0 (a missing cost is left out, never 0)")
                 lo, est, hi = cost.get("low"), cost.get("estimate"), cost.get("high")
                 if all(isinstance(v, (int, float)) for v in (lo, est, hi)) and not lo <= est <= hi:
@@ -83,31 +87,35 @@ def check(graph: object) -> tuple[list[str], list[str]]:
                 err.append(f"{where}: {key} must be a list of strings")
         if n.get("gains") and n.get("kind") != "goal":
             warn.append(f"{where}: gains are drawn only on goals")
-        if topic_ids and n.get("topic") and n["topic"] not in topic_ids:
+        if topic_ids and isinstance(n.get("topic"), str) and n["topic"] not in topic_ids:
             warn.append(f"{where}: topic {n['topic']!r} is not in topics, so it draws as 'other'")
     for nid, n in by_id.items():
         p = n.get("parent")
-        if p is None:
+        if p is None or not isinstance(p, str):
             continue
         if p not in by_id:
             err.append(f"node {nid!r}: parent {p!r} does not exist")
         elif n.get("kind") == "goal":
             err.append(f"node {nid!r}: a goal is point B and has no parent")
-    for nid in by_id:                                  # containment must be a forest
+    depth_cap = 32
+    for nid in by_id:                                  # containment must be a forest, and a shallow one
         seen, a = set(), nid
-        while a is not None and a in by_id:
+        while isinstance(a, str) and a in by_id:
             if a in seen:
                 err.append(f"node {nid!r}: parent chain loops")
                 break
             seen.add(a)
             a = by_id[a].get("parent")
+        else:
+            if len(seen) > depth_cap:
+                err.append(f"node {nid!r}: nested {len(seen)} deep; the map draws at most {depth_cap} levels")
     succ: dict[str, list[str]] = {}
     for i, e in enumerate(graph.get("edges", []) or []):
         if not isinstance(e, dict):
             err.append(f"edges[{i}]: not an object")
             continue
         a, b = e.get("from"), e.get("to")
-        if a not in by_id or b not in by_id:
+        if not isinstance(a, str) or not isinstance(b, str) or a not in by_id or b not in by_id:
             err.append(f"edges[{i}]: {a!r} -> {b!r} names a node that does not exist")
             continue
         if a == b:
@@ -134,7 +142,7 @@ def check(graph: object) -> tuple[list[str], list[str]]:
     for u in list(succ):
         if u not in state:
             dfs(u, [])
-    kids = {n.get("parent") for n in by_id.values()}
+    kids = {n.get("parent") for n in by_id.values() if isinstance(n.get("parent"), str)}
     nd = [nid for nid, n in by_id.items() if nid not in kids and n.get("state") != "done"
           and "estimate" not in (n.get("cost") or {})]
     if nd:
@@ -259,10 +267,10 @@ def _quantiles(xs: list[float]) -> tuple[float, float, float]:
 
 
 def estimate(graph: dict, window_days: int = 30, min_samples: int = 5, today: dt.date | None = None) -> dict:
-    """Fill estimate/low/high on open tasks without one: the median (p25–p75) of what done tasks of the same kind
+    """Fill estimate (and low/high from 3 samples up) on open tasks without one: the median (p25–p75) of what done tasks of the same kind
     and topic cost in the window; all topics pooled when fewer than `min_samples`; no samples -> left N/D."""
     today = today or dt.date.today()
-    parents = {n.get("parent") for n in graph["nodes"]}
+    parents = {n.get("parent") for n in graph["nodes"] if isinstance(n.get("parent"), str)}
     leaves = [n for n in graph["nodes"] if n["id"] not in parents and n.get("kind", "task") != "goal"]
 
     def recent(n: dict) -> bool:
@@ -277,8 +285,8 @@ def estimate(graph: dict, window_days: int = 30, min_samples: int = 5, today: dt
     samples = [n for n in leaves if n.get("state") == "done" and isinstance((n.get("cost") or {}).get("actual"), (int, float)) and recent(n)]
     filled = 0
     for n in leaves:
-        if n.get("state") == "done" or "estimate" in (n.get("cost") or {}):
-            continue
+        if n.get("state") != "open" or "estimate" in (n.get("cost") or {}):
+            continue                                    # done and active work keep what they have
         kind = n.get("kind", "task")
         same = [s["cost"]["actual"] for s in samples if s.get("kind", "task") == kind and s.get("topic") == n.get("topic")]
         pool = same if len(same) >= min_samples else [s["cost"]["actual"] for s in samples if s.get("kind", "task") == kind]
@@ -286,7 +294,9 @@ def estimate(graph: dict, window_days: int = 30, min_samples: int = 5, today: dt
             continue
         lo, mid, hi = _quantiles(pool)
         cost = dict(n.get("cost") or {})
-        cost.update(estimate=round(mid, 4), low=round(lo, 4), high=round(hi, 4))
+        cost["estimate"] = round(mid, 4)
+        if len(pool) >= 3:                              # fewer samples give a point, not a range that reads as certain
+            cost.update(low=round(lo, 4), high=round(hi, 4))
         n["cost"] = cost
         filled += 1
     graph.setdefault("notes", [])
@@ -306,7 +316,7 @@ def build(graph: dict) -> str:
 
 
 def _load(path: str) -> dict:
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    return page.load_json(path)
 
 
 def _write(data: object, out: str | None) -> None:
@@ -347,7 +357,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "merge":
         _write(merge([_load(p) for p in args.graphs]), args.out)
         return 0
-    graph = _load(args.graph)
+    try:
+        graph = _load(args.graph)
+    except ValueError as e:                             # bad JSON, NaN or Infinity
+        print(f"error: {args.graph}: {e}", file=sys.stderr)
+        return 1
     errors, warnings = check(graph)
     for w in warnings:
         print(f"warn: {w}", file=sys.stderr)

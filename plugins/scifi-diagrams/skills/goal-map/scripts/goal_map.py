@@ -21,7 +21,7 @@ import page  # noqa: E402  (shared/page.py)
 
 SCHEMA = "goal-map/1"
 STATES = {"open", "closed"}
-URL = re.compile(r"^(https?://|/|\./|\.\./|#)")
+URL = page.SAFE_URL
 
 
 def _count(v: object) -> bool:
@@ -111,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("goals")
     b.add_argument("-o", "--out", required=True)
     args = ap.parse_args(argv)
-    data = json.loads(Path(args.goals).read_text(encoding="utf-8"))
+    data = page.load_json(args.goals)
     errors, warnings = check(data)
     for w in warnings:
         print(f"warn: {w}", file=sys.stderr)

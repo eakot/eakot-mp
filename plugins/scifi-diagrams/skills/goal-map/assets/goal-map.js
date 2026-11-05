@@ -16,7 +16,8 @@
   const WORLD = 1320, R_CORE = 70, R_IN = 120, R_OUT = 500;
 
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const safeUrl = u => (/^(https?:)?\/\//i.test(String(u || "")) || /^[./#]/.test(String(u || "")) ? String(u) : "");
+  // http(s), or a same-origin path; `//host` and `javascript:` are dropped (the same rule as page.SAFE_URL)
+  const safeUrl = u => (/^(https?:\/\/|\/(?!\/)|\.\.?\/|#)/i.test(String(u || "")) ? String(u) : "");
   const pct = v => (v == null || isNaN(v) ? "–" : `${Math.round(v)} %`);
   const bodyR = g => 9 + 3.2 * Math.sqrt(Math.max(g.total, 1));
   // Progress is distance to the core: a finished goal has reached it. sqrt spreads the crowd near done.

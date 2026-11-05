@@ -93,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("doc")
     b.add_argument("-o", "--out", required=True)
     args = ap.parse_args(argv)
-    doc = json.loads(Path(args.doc).read_text(encoding="utf-8"))
+    doc = page.load_json(args.doc)
     errors, warnings = check(doc)
     for w in warnings:
         print(f"warn: {w}", file=sys.stderr)

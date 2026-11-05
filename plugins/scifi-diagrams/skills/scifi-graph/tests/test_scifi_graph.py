@@ -73,6 +73,37 @@ class Check(unittest.TestCase):
         self.assertIn("low ≤ estimate ≤ high", errs)
         self.assertIn("takes only", errs)
 
+    def test_non_finite_and_wrong_types_are_errors_not_crashes(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "nan.json"
+            f.write_text('{"schema":"scifi-graph/1","nodes":[{"id":"a","state":"open","cost":{"estimate":NaN}}]}')
+            self.assertEqual(sg.main(["build", str(f), "-o", str(Path(d) / "x.html")]), 1)
+            self.assertFalse((Path(d) / "x.html").exists())
+        g = tiny()
+        g["topics"] = [{"id": "t"}]
+        g["nodes"][1]["parent"] = ["g"]
+        g["nodes"][2]["topic"] = ["t"]
+        g["edges"].append({"from": [1], "to": "t2"})
+        errs = " | ".join(self.errors(g))
+        self.assertIn("parent must be a string", errs)
+        self.assertIn("topic must be a string", errs)
+        self.assertIn("names a node that does not exist", errs)
+        g = tiny()
+        g["nodes"][2]["cost"] = {"actual": float("inf")}
+        self.assertTrue(any("≥ 0" in e for e in self.errors(g)))
+
+    def test_deep_nesting_is_reported(self):
+        g = {"schema": sg.SCHEMA, "nodes": [{"id": "n0", "kind": "epic", "state": "open"}]}
+        g["nodes"] += [{"id": f"n{i}", "kind": "task", "state": "open", "parent": f"n{i - 1}"} for i in range(1, 40)]
+        self.assertTrue(any("deep" in e for e in self.errors(g)))
+
+    def test_protocol_relative_url_is_refused(self):
+        g = tiny()
+        g["nodes"][0]["url"] = "//elsewhere.example/x"
+        self.assertTrue(any("url" in e for e in self.errors(g)))
+        g["nodes"][0]["url"] = "/same/origin"
+        self.assertEqual(self.errors(g), [])
+
     def test_bad_url_and_schema(self):
         g = tiny()
         g["schema"] = "x"
@@ -152,6 +183,13 @@ class MergeEstimate(unittest.TestCase):
                 n["closed"] = "2301-01-01"
         g = sg.estimate(g, today=dt.date(2301, 6, 24))
         self.assertNotIn("cost", next(n for n in g["nodes"] if n["id"] == "open"))   # no sample: N/D, not 0
+
+    def test_active_is_never_estimated_and_few_samples_give_no_range(self):
+        g = self.graph([2])
+        g["nodes"].append({"id": "busy", "kind": "task", "state": "active", "topic": "a"})
+        g = sg.estimate(g, today=dt.date(2301, 6, 24))
+        self.assertNotIn("cost", next(n for n in g["nodes"] if n["id"] == "busy"))
+        self.assertEqual(next(n for n in g["nodes"] if n["id"] == "open")["cost"], {"estimate": 2})
 
     def test_estimate_never_overwrites(self):
         g = self.graph([1, 2, 3, 4, 5])
@@ -240,6 +278,21 @@ console.log(JSON.stringify({{nodes: out, totals: m.totals, bands: m.bands.map(b 
             if e.get("kind") == "builds-on":
                 a, b = m["nodes"][e["from"]]["box"], m["nodes"][e["to"]]["box"]
                 self.assertLessEqual(a[0] + a[2], b[0], e)
+
+    def test_survives_hostile_input(self):
+        hostile = {"schema": sg.SCHEMA, "topics": [None, 3, {"id": 4}], "edges": [None, {"from": [1], "to": {}}],
+                   "nodes": [None, 7, {"id": "g", "kind": 5, "state": None, "gains": "x", "decides": [5],
+                                       "cost": {"estimate": -1, "actual": "9"}, "title": {"a": 1}, "topic": ["t"]},
+                             {"id": "t", "parent": ["g"], "gains": [5, "+2 ok"]}]}
+        m = self.prepare(hostile)
+        self.assertEqual(m["totals"]["togo"], 0)                     # a negative estimate is N/D, not -1
+        self.assertEqual(m["nodes"]["g"]["roll"]["togoNd"], 1)
+
+    def test_a_very_deep_chain_draws(self):
+        g = {"schema": sg.SCHEMA, "nodes": [{"id": "n0", "kind": "epic", "state": "open"}]}
+        g["nodes"] += [{"id": f"n{i}", "state": "open", "parent": f"n{i - 1}"} for i in range(1, 20000)]
+        m = self.prepare(g)
+        self.assertEqual(len(m["nodes"]), 20000)
 
     def test_survives_a_cycle_and_a_parent_loop(self):
         g = copy.deepcopy(tiny())
