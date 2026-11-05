@@ -1,0 +1,310 @@
+<!-- /assets/... is rewritten by Quarto to a page-relative path at render (see preload.html). -->
+<script src="/assets/vendor/uPlot.iife.min.js"></script>
+<script>
+/* scifi-wiki live layer. Every chart and briefing line runs its PromQL from this browser against the
+   Prometheus-compatible API in its data-vm attribute (the server must send Access-Control-Allow-Origin).
+   Charts are uPlot 1.6.32 (assets/vendor, MIT): drag across a chart to zoom, Ctrl+wheel or pinch to zoom,
+   double-click to reset, click a legend entry to hide a series. Marks follow the dataviz rules: 2px lines,
+   at most 4 series and then "other", legend + direct end labels, crosshair tooltip, table view.
+   The briefing speaks the grafana-sitrep sheet grammar: label ..... value TAG, OK/WARN/ACT/INFO/N/D. */
+(() => {
+  const SLOTS = ["--s1", "--s2", "--s3", "--s4"];
+  const SEC = { m: 60, h: 3600, d: 86400, w: 604800 };
+  const dur = s => parseInt(s, 10) * SEC[s.slice(-1)];
+  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888";
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const fmt = v => v == null || isNaN(v) ? "–" : Math.abs(v) >= 100 ? Math.round(v).toString()
+    : Math.abs(v) >= 10 ? v.toFixed(1).replace(/\.0$/, "") : v.toFixed(2).replace(/\.?0+$/, "");
+  const day = t => new Date(t * 1000).toISOString().slice(5, 10);
+  const hour = t => new Date(t * 1000).toISOString().slice(11, 16) + "Z";
+
+  async function vm(base, path, params) {
+    if (!base) throw new Error("no metrics url");
+    const r = await fetch(`${base}${path}?${new URLSearchParams(params)}`, { mode: "cors" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    if (j.status !== "success") throw new Error(j.error || "query failed");
+    return j.data.result;
+  }
+
+  // ---- series shaping: fold, never generate a 5th hue ---------------------------------------
+  function shape(result, d, xs) {
+    const label = d.label;
+    let series = result.map(r => {
+      const m = new Map(r.values.map(([t, v]) => [Math.round(t), parseFloat(v)]));
+      const vals = xs.map(t => (m.has(t) ? m.get(t) : null));
+      return { name: label ? (r.metric[label] || "∅") : d.title.split(",")[0], vals,
+               total: vals.reduce((a, b) => a + (b || 0), 0) };
+    }).filter(s => s.total !== 0 || result.length === 1);
+    const order = (d.order || "").split(",").filter(Boolean);
+    series.sort((a, b) => {
+      const ia = order.indexOf(a.name), ib = order.indexOf(b.name);
+      if (ia >= 0 || ib >= 0) return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      return b.total - a.total;
+    });
+    if (series.length > 4) {
+      const rest = series.slice(3);
+      const other = { name: `other (${rest.length})`, other: true, total: 0,
+        vals: xs.map((_, i) => rest.some(s => s.vals[i] != null) ? rest.reduce((a, s) => a + (s.vals[i] || 0), 0) : null) };
+      series = series.slice(0, 3).concat(other);
+    }
+    series.forEach((s, i) => { s.color = css(s.other ? "--s-other" : SLOTS[i]); });
+    return series;
+  }
+
+  // ---- uPlot plugins -------------------------------------------------------------------------
+  const clampX = (u, lo, hi) => {
+    const x0 = u.data[0][0], xN = u.data[0][u.data[0].length - 1];
+    const span = Math.min(xN - x0, Math.max(hi - lo, (xN - x0) / 200));
+    lo = Math.max(x0, Math.min(lo, xN - span));
+    u.setScale("x", { min: lo, max: lo + span });
+  };
+  // Ctrl/⌘+wheel (a trackpad pinch sends this) zooms x around the cursor; a plain wheel scrolls the page.
+  const wheelZoom = () => ({ hooks: { ready: u => {
+    u.over.addEventListener("wheel", e => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const at = u.posToVal(e.offsetX, "x"), f = e.deltaY < 0 ? 0.8 : 1.25;
+      clampX(u, at - (at - u.scales.x.min) * f, at + (u.scales.x.max - at) * f);
+    }, { passive: false });
+  } } });
+  // Two fingers pinch x; one finger pans once zoomed in. Vertical page scroll stays the browser's.
+  const touchZoom = () => ({ hooks: { ready: u => {
+    const o = u.over; let g = null;
+    o.style.touchAction = "pan-y";
+    const pts = t => [...t].map(p => p.clientX - o.getBoundingClientRect().left);
+    o.addEventListener("touchstart", e => {
+      g = { min: u.scales.x.min, max: u.scales.x.max, p: pts(e.touches), w: o.clientWidth };
+    }, { passive: true });
+    o.addEventListener("touchmove", e => {
+      if (!g) return;
+      const p = pts(e.touches), span = g.max - g.min;
+      if (p.length === 2 && g.p.length === 2) {
+        e.preventDefault();
+        const d0 = Math.abs(g.p[1] - g.p[0]) || 1, d1 = Math.abs(p[1] - p[0]) || 1;
+        const c = g.min + ((g.p[0] + g.p[1]) / 2 / g.w) * span, ns = span * d0 / d1, at = (p[0] + p[1]) / 2 / g.w;
+        clampX(u, c - at * ns, c - at * ns + ns);
+      } else if (p.length === 1 && g.p.length === 1 && u.data[0][u.data[0].length - 1] - u.data[0][0] > span * 1.01) {
+        const dx = ((p[0] - g.p[0]) / g.w) * span;
+        clampX(u, g.min - dx, g.max - dx);
+      }
+    }, { passive: false });
+    o.addEventListener("touchend", () => { g = null; });
+  } } });
+  // Crosshair tooltip with the raw (unstacked) values.
+  const tooltip = (fig, raw, d, ref) => {
+    const tip = document.createElement("div"); tip.className = "fc-tip"; fig.appendChild(tip);
+    return { hooks: { setCursor: u => {
+      const i = u.cursor.idx;
+      if (i == null || u.cursor.left < 0) { tip.style.display = "none"; return; }
+      const t = u.data[0][i], long = u.data[0][u.data[0].length - 1] - u.data[0][0] > 2 * 86400;
+      tip.innerHTML = `<div>${long ? day(t) + " " : ""}${hour(t)}</div>` + raw.filter(s => u.series[s.slot].show)
+        .map(s => `<div><i style="background:${s.color}"></i>${esc(s.name)} <b>${fmt(s.vals[i])}${esc(d.unit || "")}</b></div>`).join("")
+        + (ref ? `<div>${esc(d.refname || "ref")} <b>${fmt(ref[i])}</b></div>` : "");
+      tip.style.display = "block";
+      const fb = fig.getBoundingClientRect(), ob = u.over.getBoundingClientRect();
+      tip.style.left = `${Math.min(ob.left - fb.left + u.cursor.left + 14, fb.width - tip.offsetWidth - 8)}px`;
+      tip.style.top = `${ob.top - fb.top + u.cursor.top + 12}px`;
+    } } };
+  };
+  // Direct labels at the line ends, nudged apart (multi-series line charts only).
+  const endLabels = raw => ({ hooks: { draw: u => {
+    const ctx = u.ctx, dpr = devicePixelRatio || 1;
+    const ends = raw.filter(s => u.series[s.slot].show).map(s => {
+      let i = s.vals.length - 1; while (i >= 0 && s.vals[i] == null) i--;
+      return i < 0 ? null : { s, x: u.valToPos(u.data[0][i], "x", true), y: u.valToPos(s.vals[i], "y", true) };
+    }).filter(Boolean).sort((a, b) => a.y - b.y);
+    ends.forEach((e, k) => { if (k && e.y - ends[k - 1].y < 12 * dpr) e.y = ends[k - 1].y + 12 * dpr; });
+    ctx.save(); ctx.font = `${10.5 * dpr}px "Share Tech Mono", monospace`; ctx.fillStyle = css("--ink"); ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ends.forEach(e => ctx.fillText(e.s.name.length > 13 ? e.s.name.slice(0, 12) + "…" : e.s.name, e.x + 6 * dpr, e.y));
+    ctx.restore();
+  } } });
+
+  // ---- one chart -----------------------------------------------------------------------------
+  function plot(fig, d, xs, series, ref) {
+    const compact = fig.classList.contains("fc-compact"), kind = d.kind || "line";
+    const stacked = kind !== "line", multi = series.length > 1 && kind === "line";
+    const acc = xs.map(() => 0);           // stacked kinds draw cumulative values; tooltip and table keep raw ones
+    const cum = series.map(s => stacked ? s.vals.map((v, i) => (acc[i] += v || 0)) : s.vals);
+    const ink = css("--dim"), grid = css("--line"), font = '10px "Share Tech Mono", monospace';
+    // bars: the tallest stack segment is drawn first and the lower ones over it, so the order runs top-down
+    const order = kind === "bars" ? series.map((_, k) => series.length - 1 - k) : series.map((_, k) => k);
+    const uSeries = [{ value: (u, t) => t == null ? "–" : `${day(t)} ${hour(t)}` }], data = [xs];
+    order.forEach(k => {
+      const s = series[k];
+      s.slot = uSeries.length;
+      const o = { label: s.name, stroke: s.color, width: kind === "bars" ? 0 : stacked ? 1.5 : 2, points: { show: false } };
+      if (kind === "bars") { o.paths = uPlot.paths.bars({ size: [0.72, 48], gap: 2 }); o.fill = s.color; }
+      if (kind === "stack" && k === 0) o.fill = s.color + "8c";
+      uSeries.push(o); data.push(cum[k]);
+    });
+    if (ref) {
+      uSeries.push({ label: d.refname || "ref", stroke: css("--act"), width: 1.5, dash: [5, 4],
+                     paths: uPlot.paths.stepped({ align: 1 }), points: { show: false } });
+      data.push(ref);
+    }
+    const bands = kind === "stack" ? series.slice(1).map((s, k) => ({ series: [s.slot, series[k].slot], fill: s.color + "8c" })) : [];
+    const peak = Math.max(0, ...data.slice(1).flat().filter(v => v != null));
+    const opts = {
+      width: Math.max(240, fig.clientWidth - 32), height: compact ? 150 : 230,
+      padding: [8, multi ? 96 : 12, 0, 0],
+      series: uSeries, bands,
+      legend: { show: series.length > 1 || !!ref, live: false },
+      cursor: { drag: { x: true, y: false, setScale: true }, sync: { key: "scifi-wiki" }, points: { show: false } },
+      scales: { x: { time: true }, y: { range: () => [0, d.unit === "%" && peak <= 100 ? 100 : peak > 0 ? peak * 1.08 : 1] } },
+      axes: [
+        { stroke: ink, font, grid: { stroke: grid, width: 1 }, ticks: { stroke: grid, width: 1 },
+          values: (u, ts) => { const long = u.scales.x.max - u.scales.x.min > 2 * 86400; return ts.map(t => long ? day(t) : hour(t)); } },
+        { stroke: ink, font, size: 40, grid: { stroke: grid, width: 1 }, ticks: { show: false }, values: (u, vs) => vs.map(fmt) },
+      ],
+      plugins: [wheelZoom(), touchZoom(), tooltip(fig, series, d, ref)].concat(multi ? [endLabels(series)] : []),
+    };
+    const box = document.createElement("div"); box.className = "fc-plot";
+    fig.appendChild(box);
+    const u = new uPlot(opts, data, box);
+    box.querySelectorAll(".u-legend .u-marker").forEach(m => { m.style.background = m.style.borderColor; });  // solid keys
+    new ResizeObserver(() => {
+      const w = Math.max(240, fig.clientWidth - 32);
+      if (Math.abs(w - u.width) > 2) u.setSize({ width: w, height: u.height });
+    }).observe(fig);
+    return box;
+  }
+
+  function table(xs, series, d) {
+    const tb = document.createElement("table"); tb.hidden = true;
+    const rows = xs.slice(-8);
+    tb.innerHTML = `<thead><tr><th>${dur(d.range || "7d") > 2 * 86400 ? "day" : "time"}</th>${series.map(s => `<th>${esc(s.name)}</th>`).join("")}</tr></thead><tbody>`
+      + rows.map((t, k) => { const i = xs.length - rows.length + k;
+          return `<tr><td>${day(t)} ${hour(t)}</td>${series.map(s => `<td>${fmt(s.vals[i])}</td>`).join("")}</tr>`; }).join("")
+      + "</tbody>";
+    return tb;
+  }
+
+  async function chart(fig) {
+    const d = fig.dataset;
+    const head = document.createElement("div"); head.className = "fc-head";
+    head.innerHTML = `<span class="fc-title">${esc(d.title)}</span><span class="fc-now"></span>`;
+    fig.appendChild(head);
+    const step = dur(d.step || "1h"), end = Math.floor(Date.now() / 1000 / step) * step, start = end - dur(d.range || "7d");
+    const xs = []; for (let t = start; t <= end; t += step) xs.push(t);
+    try {
+      if (!window.uPlot) throw new Error("uPlot did not load");
+      const params = { query: d.q, start, end, step };
+      const [res, refRes] = await Promise.all([vm(d.vm, "/api/v1/query_range", params),
+        d.ref ? vm(d.vm, "/api/v1/query_range", { ...params, query: d.ref }) : Promise.resolve(null)]);
+      const series = shape(res, d, xs);
+      if (!series.length) throw new Error("no data in range");
+      let ref = null;
+      if (refRes && refRes.length) {
+        const m = new Map(refRes[0].values.map(([t, v]) => [Math.round(t), parseFloat(v)]));
+        ref = xs.map(t => (m.has(t) ? m.get(t) : null));
+      }
+      const box = plot(fig, d, xs, series, ref);
+      const last = series.reduce((a, s) => { const v = s.vals.filter(v => v != null).pop(); return a + (v || 0); }, 0);
+      head.querySelector(".fc-now").textContent = d.kind === "bars" ? "" : fmt(last) + (d.unit || "");
+      const tb = table(xs, series, d);
+      const btn = document.createElement("button"); btn.textContent = "table"; btn.type = "button";
+      btn.onclick = () => { tb.hidden = !tb.hidden; btn.textContent = tb.hidden ? "table" : "chart"; box.style.display = tb.hidden ? "" : "none"; };
+      head.appendChild(btn);
+      const hint = document.createElement("div"); hint.className = "fc-hint";
+      hint.textContent = "drag to zoom · ctrl+wheel or pinch · double-click resets";
+      fig.append(tb, hint);
+    } catch (e) {
+      const off = document.createElement("div"); off.className = "fc-offline";
+      off.textContent = "TELEMETRY · " + ({ "no data in range": "no data in range", "no metrics url": "no metrics.url in wiki.json",
+        "uPlot did not load": "assets/vendor/uPlot.iife.min.js did not load" }[e.message] || "metrics endpoint unreachable from this browser");
+      fig.appendChild(off);
+    }
+    if (d.panel) {
+      const a = document.createElement("a"); a.href = d.panel; a.target = "_blank"; a.rel = "noopener";
+      a.textContent = "panel ↗"; a.title = "Open the dashboard panel this chart mirrors"; head.appendChild(a);
+    }
+  }
+
+  // ---- the briefing: grafana-sitrep's sheet grammar --------------------------------------------
+  // ok = fine · warn = look · bad = someone must act · info = idle on purpose · nd = no data (never shown as 0)
+  const TAG = { ok: "OK", warn: "WARN", bad: "ACT", info: "INFO", nd: "N/D", idle: "····" };
+  const RANK = ["bad", "warn", "nd", "ok", "info", "idle"];
+  const FORMAT = {
+    int: x => Math.round(x).toLocaleString("en-US"),
+    pct: x => `${Math.round(x)}%`,
+    bytes: x => { const U = ["B", "KB", "MB", "GB", "TB", "PB"]; let v = Math.abs(x), i = 0;
+      while (v >= 1024 && i < U.length - 1) { v /= 1024; i++; }
+      return `${x < 0 ? "-" : ""}${i === 0 || v >= 99.95 ? Math.round(v) : v.toFixed(1)} ${U[i]}`; },
+    dur: s => { s = Math.max(0, Math.round(s)); const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+      return d ? `${d}d ${String(h).padStart(2, "0")}h` : h ? `${h}h ${String(m).padStart(2, "0")}m` : m ? `${m}m` : `${s}s`; },
+  };
+  // a rule string (ok_if_ge:N, ok_if_le:N, warn_if_lt:N, act_if_ge:N,warn_if_ge:M, info), or sitrep's steps
+  // [[null,"ok"],[12,"warn"],[15,"bad"]]: the first level applies below the first limit
+  function judge(d, v) {
+    if (v == null) return "nd";
+    if (d.steps) {
+      const steps = JSON.parse(d.steps); let l = steps[0][1];
+      for (const [lim, s] of steps.slice(1)) if (v >= lim) l = s;
+      return l;
+    }
+    const rule = d.rule || "info";
+    if (rule === "info") return "info";
+    for (const part of rule.split(",")) {
+      const [k, n] = part.split(":"); const t = parseFloat(n);
+      if (k === "ok_if_ge") return v >= t ? "ok" : "warn";
+      if (k === "ok_if_le") return v <= t ? "ok" : "warn";
+      if (k === "warn_if_lt") return v < t ? "warn" : "ok";
+      if (k === "act_if_ge" && v >= t) return "bad";
+      if (k === "warn_if_ge" && v >= t) return "warn";
+    }
+    return "ok";
+  }
+  async function briefing(sec) {
+    const base = sec.dataset.vm, clock = sec.querySelector(".brief-clock");
+    const tick = () => { clock.textContent = new Date().toISOString().slice(0, 16).replace("T", " ") + "Z"; };
+    tick(); setInterval(tick, 30000);
+    const verdict = sec.querySelector(".br .bv");
+    const rows = [...sec.querySelectorAll(".ln[data-q]")];
+    const states = [];
+    let reached = 0;
+    await Promise.all(rows.map(async (li, k) => {
+      const d = li.dataset, val = li.querySelector(".v"), tg = li.querySelector(".tg");
+      let s = "nd";
+      try {
+        const [r, of] = await Promise.all([vm(base, "/api/v1/query", { query: d.q }),
+          d.of ? vm(base, "/api/v1/query", { query: d.of }) : Promise.resolve(null)]);
+        reached++;
+        const v = r.length ? parseFloat(r[0].value[1]) : null;           // an empty result is N/D, never 0
+        const o = of && of.length ? parseFloat(of[0].value[1]) : null;
+        const f = FORMAT[d.fmt] || fmt;
+        val.textContent = v == null ? "—" : f(v) + (d.unit || "") + (o != null ? ` / ${f(o)}${d.unit || ""}` : "");
+        s = judge(d, v);
+        if (d.names && v > 0) {
+          const names = await vm(base, "/api/v1/query", { query: d.names });
+          const nt = document.createElement("div"); nt.className = "nt";
+          nt.textContent = names.map(n => n.metric.alertname || Object.values(n.metric).join(" ")).sort().join(" · ");
+          li.after(nt);
+        }
+      } catch (e) { val.textContent = "UNREAD"; }
+      li.className = `ln s-${s}`; tg.textContent = TAG[s];
+      states[k] = { s, d };
+    }));
+    const br = verdict.parentElement;
+    if (!base || !reached) {
+      verdict.textContent = base ? "NO LINK · metrics endpoint unreachable from this browser" : "NO METRICS URL · set metrics.url in wiki.json";
+      br.className = "br s-nd"; return;
+    }
+    // The SITREP line names the move: the worst line's `move`, else its label and tag.
+    const worst = RANK.find(r => states.some(x => x && x.s === r)) || "ok";
+    const flagged = states.filter(x => x && ["bad", "warn", "nd"].includes(x.s));
+    if (!flagged.length) verdict.textContent = sec.dataset.allOk || `All ${states.length} lines nominal.`;
+    else {
+      const first = flagged.find(x => x.s === worst);
+      verdict.textContent = (first.d.move || `${first.d.label}: ${TAG[first.s]}`) + (flagged.length > 1 ? ` (+${flagged.length - 1} more)` : "");
+    }
+    br.className = `br s-${worst}`;
+  }
+
+  const io = new IntersectionObserver(entries => entries.forEach(e => {
+    if (e.isIntersecting) { io.unobserve(e.target); chart(e.target); }
+  }), { rootMargin: "200px" });
+  document.querySelectorAll("figure.fc").forEach(f => io.observe(f));
+  document.querySelectorAll("section.briefing").forEach(briefing);
+})();
+</script>
