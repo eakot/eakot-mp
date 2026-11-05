@@ -10,7 +10,7 @@ What it shows:
 - no state tags (every line `····`), no system names, whole words with correct plurals, grouped big numbers;
 - the verdict line with no "SITREP" label (`brief_label=None`);
 - generator data passed in through `consts`, never by formatting the JS;
-- a column header that shares its widths with the rows (`cols()`);
+- a table: its title in `sub()`, the column names in a header row that shares its widths with the lines (`cols()`);
 - the coverage map of a full redraw: every original panel mapped, refused when one is not, and the table printed
   for the hand-over; then the parity lint.
 """
@@ -52,7 +52,7 @@ const lines = [
   ln('used an AI tool at least once', people == null ? '—' : P(people), people == null ? 'nd' : 'idle'),
   ln('used it on 7 days or more', days.length ? P(regular) : '—', days.length ? 'idle' : 'nd'),
   sub('what they did'),
-  kinds.length ? T.hdr + kinds.slice(0, 5).map((r) => item(T.row([int(r.value), esc(KN.get(r.labels.kind) || r.labels.kind)]))).join('')
+  kinds.length ? T.hdr + kinds.slice(0, 5).map((r) => T.line([int(r.value), esc(KN.get(r.labels.kind) || r.labels.kind)])).join('')
     : ln('events', '—', 'nd'),
 ];
 const verdict = people == null ? 'No usage data for the last 14 days: the telemetry is not arriving.'

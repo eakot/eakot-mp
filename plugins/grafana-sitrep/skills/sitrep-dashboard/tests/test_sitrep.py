@@ -6,6 +6,7 @@ import copy
 import http.server
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -175,7 +176,7 @@ class Sheet(unittest.TestCase):
         js = sheet_harness.SHIM % "[]" + s["options"]["helpers"] + "\nprocess.stdout.write(String(OUT));\n"
         out = subprocess.run(["node", "-e", js], capture_output=True, text=True, check=True).stdout
         self.assertIn("&lt;b&gt;&amp;x", out)
-        self.assertIn("a &amp; &lt;b&gt;</div>", out)
+        self.assertIn("a &amp; &lt;b&gt;</span></div>", out)
         self.assertNotIn("&amp;amp;", out)
 
     def test_helpers_edge_values(self):
@@ -256,6 +257,132 @@ class Sheet(unittest.TestCase):
             outs.append(subprocess.run(["node", "-e", js], capture_output=True, text=True, check=True).stdout)
         self.assertEqual(outs[0], outs[1])
         self.assertLess(len(sitrep.LIB), 0.7 * len(full))
+
+
+FIG = " "
+# a usage table as on the page in issue #9: Cyrillic titles and values, fixed columns, a free last column, tags
+PEOPLE = ("const T = cols([[14, 'логин'], [5, 'суток', 'r'], [4, 'calls', 'r'], [9, 'когда был', 'r'], [0, 'клиент']], { tag: true });\n"
+          "const P = [['i.moshev', '9/14', 740, durCol(3420), 'claude', 'ok'], ['в.борисов', '8/14', 44, durCol(187200), 'хуков нет', 'warn'],"
+          " ['m.vinogradov', '6/14', 105, durCol(69480), 'af, claude', 'ok'], ['очень.длинный.логин', null, null, durCol(null), null, 'nd']];\n"
+          "const html = page('01', 'T', brief('x') + sub('по людям — 4') + T.hdr"
+          " + P.map((r) => T.line([esc(r[0]), r[1], r[2] == null ? null : int(r[2]), r[3], r[4] == null ? null : esc(r[4])], r[5])).join(''));")
+
+
+def cells(line):
+    """(class, style, text) of every table cell of one line."""
+
+    return re.findall(r'<span class="(tc[^"]*)"(?: style="([^"]*)")?[^>]*>(.*?)</span>', line)
+
+
+class Table(unittest.TestCase):
+    """cols(): a header row and rows that share one width spec (issue #9)."""
+
+    def lines(self, body):
+
+        out = run_js(mini_sheet(1, 0, body, locale="ru-RU"))
+        return re.findall(r'<div class="it[^"]*"[^>]*>.*?</div>', out), out
+
+    def test_header_and_rows_share_one_width_spec(self):
+        lines, out = self.lines(PEOPLE)
+        self.assertNotIn("логин", out.split('<div class="sh">')[1].split("</div>")[0])  # the title is its own line
+        hdr, rows = lines[0], lines[1:]
+        self.assertIn('class="it ch tl"', hdr)
+        self.assertEqual(len(rows), 4)
+        widths = lambda line: [style for _, style, _ in cells(line)]  # noqa: E731
+        self.assertEqual(widths(hdr)[:4], ["width:14ch", "width:6ch", "width:5ch", "width:11ch"])  # widened to fit titles
+        for r in rows:
+            self.assertEqual([w.split(":")[1] for w in widths(r)[:4]], [w.split(":")[1] for w in widths(hdr)[:4]], r)
+            self.assertEqual(widths(r)[0], "width:14ch")  # a left cell: fixed, clips
+            self.assertTrue(all(w.startswith("min-width:") for w in widths(r)[1:4]))  # a number never clips
+            self.assertEqual(cells(r)[-1][0], "tc tf")  # free text, last
+        # every cell is joined to the next by a space: a full cell cannot touch the next one
+        for line in lines:
+            self.assertEqual(line.count("</span> <span"), 4 + (line is not hdr), line)
+        # the tag: its own column, last on the line, none in the header
+        self.assertEqual([r.rsplit('<span class="tg">', 1)[1].split("<")[0] for r in rows], ["OK", "WARN", "OK", "N/D"])
+        self.assertNotIn('class="tg"', hdr)
+        self.assertEqual(sheet_harness.text(rows[1]), "в.борисов 8/14 44 2 d " + FIG + "4 h хуков нет   [WARN]")
+
+    def test_mixed_fixed_and_free_columns_and_missing_values(self):
+        lines, out = self.lines(PEOPLE)
+        last = sheet_harness.text(lines[-1])
+        self.assertEqual(last.split(), ["очень.длинный.логин", "—", "—", "—", "—", "[N/D]"])
+        self.assertNotIn("undefined", out)
+        # a left cell that may be cut carries its whole text on hover; Cyrillic counts as wider than a ch
+        self.assertIn('title="очень.длинный.логин"', lines[-1])
+        self.assertNotIn("title=", lines[1])
+        body = ("const T = cols([[12, 'a'], [0, 'b']]); const html = page('01', 'T', brief('x') + T.line(['abcdefghijkl', 'x'])"
+                " + T.line(['абвгдежзийк', 'x']) + T.line(['abcdefghijklm', 'x']));")
+        lines, _ = self.lines(body)
+        self.assertEqual(["title=" in x for x in lines], [False, True, True])
+
+    def test_right_cells_are_not_padded(self):
+        lines, _ = self.lines(PEOPLE)
+        when = [c[2] for c in (cells(r)[3] for r in lines[1:])]
+        self.assertEqual(when[0], "57 m")  # durCol's leading figure spaces dropped: text-align does the padding
+        self.assertEqual(when[1], "2 d " + FIG + "4 h")  # the inner one stays: the units line up
+        self.assertFalse(any(w.startswith(FIG) for w in when))
+
+    def test_free_column_in_the_middle_is_refused(self):
+        s = mini_sheet(1, 0, "const T = cols([[6, 'a'], [0, 'b'], [4, 'n', 'r']]); const html = page('01', 'T', brief('x') + T.hdr);")
+        r = harness({"panels": [s]}, "--fixture", fixture({"A": [[{}, 1]]}))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("only the last column may be free text", r.stdout)
+
+    def test_row_inside_item_keeps_working(self):
+        lines, _ = self.lines("const T = cols([[8, 'n', 'r'], [0, 'what']]); const html = page('01', 'T', brief('x') + T.hdr"
+                              " + item(T.row([int(12), esc('<b>')]), 'ok'));")
+        self.assertEqual([c[1] for c in cells(lines[0])], ["width:8ch", ""])
+        self.assertEqual([c[1] for c in cells(lines[1])], ["min-width:8ch", ""])
+        self.assertEqual(sheet_harness.text(lines[1]), "12 <b>")
+
+    def test_harness_reads_a_table_from_a_fixture(self):
+        body = ("const T = cols([[14, 'логин'], [6, 'дней', 'r'], [0, 'клиент']], { tag: true });\n"
+                "const R = rows('A').sort((x, y) => y.value - x.value);\n"
+                "const html = page('01', 'T', brief(R.length ? `${R.length} чел.` : 'нет данных') + sub('по людям')"
+                " + (R.length ? T.hdr + R.map((r) => T.line([esc(r.labels.login), int(r.value), esc(r.labels.client)],"
+                " r.value >= 7 ? 'ok' : 'warn')).join('') : ln('люди', '—', 'nd')));")
+        d = {"panels": [mini_sheet(1, 0, body, locale="ru-RU")]}
+        r = harness(d, "--fixture", fixture({"A": [[{"login": "i.moshev", "client": "claude"}, 9],
+                                                   [{"login": "в.борисов", "client": "хуков нет"}, 3]]}))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("логин дней клиент\n", r.stdout)
+        self.assertIn("i.moshev 9 claude   [OK]\n", r.stdout)
+        self.assertIn("в.борисов 3 хуков нет   [WARN]\n", r.stdout)
+        # on no data the table goes, and a number that stayed in a right cell would be caught
+        self.assertEqual(harness(d, "--empty").returncode, 0)
+        made = mini_sheet(1, 0, "const T = cols([[6, 'n', 'r'], [0, 'x']]); const v = one('A');"
+                                " const html = page('01', 'T', brief('x') + T.line([int(v || 0), 'people']));")
+        r = harness({"panels": [made]}, "--empty")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("a number on no data", r.stdout)
+
+    @unittest.skipUnless(os.environ.get("SITREP_PLAYWRIGHT") and os.environ.get("SITREP_CHROMIUM"),
+                         "set SITREP_PLAYWRIGHT (playwright-core) and SITREP_CHROMIUM to check the geometry in a browser")
+    def test_geometry_in_a_browser(self):
+        """The header's cells start (left) and end (right-aligned) where the rows' cells do, to half a pixel."""
+        out = run_js(mini_sheet(1, 0, PEOPLE, locale="ru-RU"))
+        page = ('<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="%s"><style>.panel{%s}</style>'
+                '</head><body><div class="panel" style="width:640px">%s</div></body></html>') % (sitrep.FONTS, sitrep.CSS, out)
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "p.html").write_text(page)
+            js = ("const { chromium } = require(%s); (async () => { const b = await chromium.launch({ executablePath: %s });"
+                  " const p = await b.newPage(); await p.goto('file://' + %s, { waitUntil: 'networkidle' }).catch(() => {});"
+                  " await p.evaluate(() => document.fonts.ready); const m = await p.evaluate(() => [...document.querySelectorAll('.it')]"
+                  ".map((l) => [...l.querySelectorAll('.tc')].map((c) => { const r = c.getBoundingClientRect(); return [r.left, r.right]; })"
+                  ".concat([...l.querySelectorAll('.tg')].map((c) => { const r = c.getBoundingClientRect(); return [r.left, r.right]; }))));"
+                  " console.log(JSON.stringify(m)); await b.close(); })();") % (
+                json.dumps(os.environ["SITREP_PLAYWRIGHT"]), json.dumps(os.environ["SITREP_CHROMIUM"]), json.dumps(str(Path(d, "p.html"))))
+            m = json.loads(subprocess.run(["node", "-e", js], capture_output=True, text=True, check=True, timeout=120).stdout)
+        hdr, rows = m[0], m[1:]
+        for r in rows:
+            self.assertAlmostEqual(r[0][0], hdr[0][0], delta=0.5)  # left column: left edges
+            for i in (1, 2, 3):  # right columns: right edges
+                self.assertAlmostEqual(r[i][1], hdr[i][1], delta=0.5)
+            self.assertAlmostEqual(r[4][0], hdr[4][0], delta=0.5)  # the free text starts at one column
+            self.assertAlmostEqual(r[5][1], rows[0][5][1], delta=0.5)  # the tags: one column at the right edge
+            for i in range(4):
+                self.assertGreater(r[i + 1][0] - r[i][1], 2, "cells touch")
 
 
 class Harness(unittest.TestCase):
