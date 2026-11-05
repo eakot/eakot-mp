@@ -14,6 +14,9 @@ A sitrep page answers the operator's questions in the order that missing one wou
 
 Big digits, gauges and rows of stat tiles are replaced, not restyled.
 
+The same sheet grammar, tags and N/D rule run outside Grafana in the `scifi-wiki` plugin's `briefing`.
+Use it when a page has to be a static site, such as a system explained beside its live numbers.
+
 ```
  01  LANES
  ┃SITREP┃ 2 slot(s) idle for cause: no-supply.

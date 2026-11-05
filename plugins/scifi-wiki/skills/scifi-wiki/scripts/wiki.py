@@ -27,10 +27,10 @@ import urllib.request
 from pathlib import Path
 
 TEMPLATE = Path(__file__).resolve().parent.parent / "template"
-GENERATED_FILES = ["index.qmd", "telemetry.qmd", "decisions.qmd", "_quarto.yml", "_sidebar.yml"]
+MANIFEST = ".wiki-staged"   # every file the last stage wrote; clean deletes these and nothing else
 SECS = {"m": 60, "h": 3600, "d": 86400, "w": 604800}
 _ADR_FILE = re.compile(r"^(\d{4})-[\w.-]+\.md$")
-_LINK = re.compile(r"(?<!!)\]\(([^)\s]+)\)")
+_LINK = re.compile(r"(!?)\[([^\]]*)\]\(([^)\s]+)\)")   # (bang, text, target): a link or an image
 _FENCE = re.compile(r"^\s*(```|~~~)")
 
 
@@ -44,7 +44,20 @@ def slugify(text: str) -> str:
     """'3. The merge line (D4)' -> 'the-merge-line': numbering, parentheticals and markup dropped, 40 chars max."""
     text = re.sub(r"\s*\([^)]*\)", "", re.sub(r"^\d+\.\s*", "", text))
     text = re.sub(r"[`*_]", "", text)
-    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:40].strip("-")
+    return re.sub(r"[\W_]+", "-", text.lower()).strip("-")[:40].strip("-")
+
+
+def gh_anchor(heading: str) -> str:
+    """The anchor GitHub gives a heading: '3. The `x` line' -> '3-the-x-line'."""
+    text = re.sub(r"[`*]", "", heading).strip().lower()
+    return re.sub(r"\s", "-", re.sub(r"[^\w\s-]", "", text))
+
+
+def pandoc_id(heading: str) -> str:
+    """The id Quarto (pandoc) gives a heading: like GitHub's, but leading non-letters dropped."""
+    text = re.sub(r"[`*]", "", heading).strip().lower()
+    text = re.sub(r"\s+", "-", re.sub(r"[^\w\s.-]", "", text))
+    return re.sub(r"^[^a-z\u00c0-\uffff]+", "", text) or "section"
 
 
 def split_sections(md: str) -> tuple[str, str, list[tuple[str, str]]]:
@@ -164,6 +177,10 @@ def lint_markdown(md: str, rel: str) -> list[tuple[str, str]]:
 
 def lint(cfg: dict) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
+    try:
+        site = Site(cfg)
+    except WikiError as e:
+        return [("error", str(e))]
     for chapter in cfg["chapters"]:
         rel = chapter["file"]
         try:
@@ -188,12 +205,16 @@ def lint(cfg: dict) -> list[tuple[str, str]]:
                 fence = not fence
             if fence:
                 continue
-            for target in _LINK.findall(line):
-                if target.startswith(("http://", "https://", "#", "mailto:")):
+            for bang, _, target in _LINK.findall(line):
+                if target.startswith(("http://", "https://", "#", "mailto:", "/")):
                     continue
                 path = target.partition("#")[0]
                 if path and not (cfg["_root"] / src_dir / path).exists():
-                    out.append(("warn", f"{rel}: link to {target!r} points at nothing under root"))
+                    out.append(("warn" if bang else "error" if not cfg.get("source_url") else "warn",
+                                f"{rel}: {'image' if bang else 'link'} {target!r} points at nothing under root"))
+                elif path and not bang and site.rewrite_link(target, src_dir, 1, rel) == target:
+                    out.append(("error", f"{rel}: link {target!r} is not a chapter or a decision record, and wiki.json "
+                                         "has no source_url, so it would break on the site; set source_url"))
     plates = {p.stem for p in (cfg["_site"] / "art").glob("*.webp")} if (cfg["_site"] / "art").is_dir() else set()
     if plates:
         for name in sorted(wanted_plates(cfg) - plates):
@@ -229,28 +250,85 @@ class Site:
         self.adr_dir = os.path.normpath(led["dir"]) if led.get("dir") else None
         self.plates = {p.stem for p in (self.site / "art").glob("*.webp")} if (self.site / "art").is_dir() else set()
         self.metrics = (cfg.get("metrics") or {}).get("url", "")
+        self.written: list[str] = []
+        # (source file, GitHub anchor) -> (chapter key, page name, id on that page or None)
+        self.anchors: dict[tuple[str, str], tuple[str, str, str | None]] = {}
+        for c in cfg["chapters"]:
+            p = self.root / c["file"]
+            if not p.is_file():
+                continue
+            _, _, sections = split_sections(p.read_text(encoding="utf-8"))
+            for i, (heading, body) in enumerate(sections, 1):
+                page = f"{i:02d}-{slugify(heading)}"
+                self.anchors.setdefault((c["file"], gh_anchor(heading)), (c["key"], page, None))
+                fence = False
+                for line in body.splitlines():
+                    if _FENCE.match(line):
+                        fence = not fence
+                    m = None if fence else re.match(r"^#{3,6} (.+?)\s*(\{[^}]*\})?\s*$", line)
+                    if m:
+                        self.anchors.setdefault((c["file"], gh_anchor(m.group(1))), (c["key"], page, pandoc_id(m.group(1))))
+
+    def write(self, rel: str, data) -> None:
+        """Write one staged file. A file already there was not written by wiki.py (clean removed those): refuse."""
+        p = self.site / rel
+        if p.exists():
+            raise WikiError(f"{p} exists and wiki.py did not write it; move it, or rename the chapter key / page")
+        p.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(data, Path):
+            shutil.copyfile(data, p)
+        else:
+            p.write_text(data, encoding="utf-8")
+        self.written.append(rel)
 
     # links ---------------------------------------------------------------------
-    def rewrite_link(self, target: str, src_dir: str, depth: int) -> str:
-        """A repo-relative link -> the wiki page that renders it, else the source host, else unchanged."""
-        if target.startswith(("http://", "https://", "#", "mailto:")):
+    def rewrite_link(self, target: str, src_dir: str, depth: int, src_file: str = "") -> str:
+        """A repo-relative link -> the wiki page (and section) that renders it, else the source host, else unchanged."""
+        if target.startswith(("http://", "https://", "mailto:", "/")):
             return target
         path, _, anchor = target.partition("#")
         up = "../" * depth
-        resolved = os.path.normpath(os.path.join(src_dir, path))
+        resolved = os.path.normpath(os.path.join(src_dir, path)) if path else src_file
+        if not resolved:
+            return target
         m = _ADR_FILE.match(os.path.basename(path))
         if m and self.adr_dir and os.path.dirname(resolved) == self.adr_dir:
             return f"{up}decisions.html#adr-{m.group(1)}"
         if resolved in self.chapter_files:
-            return f"{up}{self.chapter_files[resolved]}/index.html"
+            hit = self.anchors.get((resolved, anchor)) if anchor else None
+            if hit:
+                key, page, inner = hit
+                return f"{up}{key}/{page}.html" + (f"#{inner}" if inner else "")
+            return target if not path else f"{up}{self.chapter_files[resolved]}/index.html"
         base = self.cfg.get("source_url")
-        if base:
+        if base and path:
             return f"{base.rstrip('/')}/{resolved}" + (f"#{anchor}" if anchor else "")
         return target
 
-    def rewrite(self, md: str, src_dir: str, depth: int) -> str:
-        md = _LINK.sub(lambda m: "](" + self.rewrite_link(m.group(1), src_dir, depth) + ")", md)
-        return re.sub(r"^(\s*)```mermaid\s*$", r"\1```{mermaid}", md, flags=re.M)
+    def image(self, target: str, src_dir: str, depth: int) -> str:
+        """A relative image -> a copy under media/ (the same tree as under root), so the site carries it."""
+        if target.startswith(("http://", "https://", "data:", "/")):
+            return target
+        resolved = os.path.normpath(os.path.join(src_dir, target.partition("#")[0]))
+        src = self.root / resolved
+        if resolved.startswith("..") or not src.is_file():
+            return target
+        rel = f"media/{resolved}"
+        if rel not in self.written:
+            self.write(rel, src)
+        return "../" * depth + rel
+
+    def rewrite(self, md: str, src_dir: str, depth: int, src_file: str = "") -> str:
+        def sub(m: re.Match) -> str:
+            bang, text, target = m.groups()
+            new = self.image(target, src_dir, depth) if bang else self.rewrite_link(target, src_dir, depth, src_file)
+            return f"{bang}[{text}]({new})"
+        out, fence = [], False
+        for line in md.split("\n"):
+            if _FENCE.match(line):
+                fence = not fence
+            out.append(line if fence else _LINK.sub(sub, line))
+        return re.sub(r"^(\s*)```mermaid\s*$", r"\1```{mermaid}", "\n".join(out), flags=re.M)
 
     # pieces --------------------------------------------------------------------
     def plate(self, name: str | None, depth: int, hero: bool = False) -> str:
@@ -276,16 +354,26 @@ class Site:
         return f'<figure class="fc{" fc-compact" if compact else ""}" {a}></figure>'
 
     def briefing_html(self) -> str:
-        items = "".join(
-            '<li class="brief-row" ' + " ".join(f'data-{k}="{esc(v)}"' for k, v in b.items())
-            + f'><span class="brief-label">{esc(b["label"])}</span><span class="brief-dots"></span>'
-              '<span class="brief-value">···</span><span class="brief-state">[ ··· ]</span></li>'
-            for b in self.cfg.get("briefing", []))
-        label = esc(self.cfg.get("briefing_label", "SITREP"))
-        return (f'<section class="briefing" data-vm="{esc(self.metrics)}"><div class="brief-head">'
-                f'<span class="brief-title">{label}</span><span class="brief-clock"></span></div>'
-                '<p class="brief-verdict">ACQUIRING TELEMETRY…</p>'
-                f'<ul class="brief-list">{items}</ul><p class="brief-alerts"></p></section>')
+        """The SITREP sheet, in grafana-sitrep's grammar: a verdict line that names the move, then one contents line
+        per number (`label ..... value TAG`), `{"head": ...}` entries as sub-heads, `note` as a dim line under."""
+        rows = []
+        for b in self.cfg.get("briefing", []):
+            if "head" in b and "q" not in b:
+                rows.append(f'<div class="sh">▸ {esc(b["head"])}</div>')
+                continue
+            attrs = " ".join(f'data-{k}="{esc(json.dumps(v) if isinstance(v, (list, dict)) else v)}"'
+                             for k, v in b.items() if k != "note")
+            rows.append(f'<div class="ln s-idle" {attrs}><span class="lb">{esc(b["label"])}</span><span class="dt"></span>'
+                        f'<span class="v">···</span><span class="tg">····</span></div>')
+            if b.get("note"):
+                rows.append(f'<div class="nt">{esc(b["note"])}</div>')
+        label = self.cfg.get("briefing_label", "SITREP")
+        bl = f'<span class="bl">{esc(label)}</span> ' if label else ""
+        ok = f' data-all-ok="{esc(self.cfg["briefing_ok"])}"' if self.cfg.get("briefing_ok") else ""
+        return (f'<section class="briefing sheet" data-vm="{esc(self.metrics)}"{ok}><div class="hd"><span class="no">00</span>'
+                f'<span class="ti">{esc(self.cfg.get("briefing_title", "Status"))}</span><span class="brief-clock"></span></div>'
+                f'<div class="br s-idle">{bl}<span class="bv">ACQUIRING TELEMETRY…</span></div>'
+                + "".join(rows) + "</section>")
 
     # pages ---------------------------------------------------------------------
     def stage_chapter(self, chapter: dict, sidebar: list) -> dict:
@@ -294,8 +382,6 @@ class Site:
         title = title or key
         mapping = chapter.get("sections") or {}
         src_dir = os.path.dirname(rel)
-        out_dir = self.site / key
-        out_dir.mkdir()
         cards, pages = [], []
         for i, (heading, body) in enumerate(sections, 1):
             slug = slugify(heading)
@@ -303,17 +389,17 @@ class Site:
             name = f"{i:02d}-{slug}"
             clean = clean_heading(heading)
             art = sec.get("plate", chapter.get("plate"))
-            page = front(clean, title) + self.plate(art, 1) + "\n\n" + self.rewrite(body, src_dir, 1) + "\n"
+            page = front(clean, title) + self.plate(art, 1) + "\n\n" + self.rewrite(body, src_dir, 1, rel) + "\n"
             if sec.get("charts"):
                 page += ("\n## Live telemetry {.telemetry-head}\n\n"
                          + raw("\n".join(self.chart_html(c) for c in sec["charts"])) + "\n")
-            (out_dir / f"{name}.qmd").write_text(page, encoding="utf-8")
+            self.write(f"{key}/{name}.qmd", page)
             pages.append({"href": f"{key}/{name}.qmd", "text": f"{i:02d} · {clean}"})
             cards.append(self.card(f"{name}.html", f"{i:02d}", clean, first_sentence(body), art, 1))
         index = front(title, chapter.get("subtitle", f"Rendered from {rel}"))
-        index += self.plate(chapter.get("plate"), 1, hero=True) + "\n\n" + self.rewrite(intro, src_dir, 1) + "\n\n"
+        index += self.plate(chapter.get("plate"), 1, hero=True) + "\n\n" + self.rewrite(intro, src_dir, 1, rel) + "\n\n"
         index += raw('<div class="cards">' + "".join(cards) + "</div>") + "\n"
-        (out_dir / "index.qmd").write_text(index, encoding="utf-8")
+        self.write(f"{key}/index.qmd", index)
         sidebar.append({"section": chapter.get("nav", title), "href": f"{key}/index.qmd", "contents": pages})
         return {"href": f"{key}/index.html", "title": title, "n": len(sections), "art": chapter.get("plate"),
                 "text": chapter.get("blurb") or first_sentence(intro)}
@@ -362,7 +448,7 @@ class Site:
                         f'<span class="adr-date">{date}</span>{t}</div>') + "\n\n"
             if summary:
                 body += f"::: {{.adr-summary}}\n{summary}\n:::\n\n"
-        (self.site / "decisions.qmd").write_text(body, encoding="utf-8")
+        self.write("decisions.qmd", body)
         return len(rows)
 
     def stage_telemetry(self) -> None:
@@ -373,7 +459,7 @@ class Site:
         page += ("Each chart runs its query from this browser. Hover for values, drag across a chart to zoom, "
                  "double-click to reset; *table* shows the numbers.\n\n")
         page += raw('<div class="deck">' + "".join(self.chart_html(c) for c in charts) + "</div>") + "\n"
-        (self.site / "telemetry.qmd").write_text(page, encoding="utf-8")
+        self.write("telemetry.qmd", page)
 
     def stage_index(self, cards: list[dict]) -> None:
         cfg = self.cfg
@@ -390,7 +476,7 @@ class Site:
             self.card(c["href"], f'{c.get("n", 0):02d}', c["title"], c.get("text", ""), c.get("art"), 0) for c in cards)
             + "</div>") + "\n\n"
         page += f"::: {{.colophon}}\n{cfg.get('colophon', 'Derived from the source documents; edit those, never this site.')}\n:::\n"
-        (self.site / "index.qmd").write_text(page, encoding="utf-8")
+        self.write("index.qmd", page)
 
     def quarto_yml(self, extra_nav: list[dict]) -> str:
         cfg = self.cfg
@@ -400,7 +486,7 @@ class Site:
         right = [{"text": t["text"], "href": t["href"]} for t in cfg.get("nav_right", [])]
         if cfg.get("repo_url"):
             right.append({"icon": "github", "href": cfg["repo_url"], "aria-label": "Source"})
-        resources = ["art/*.webp", "assets/fonts/*"] + list(cfg.get("resources", []))
+        resources = ["art/*.webp", "assets/fonts/*", "assets/vendor/*", "media/**"] + list(cfg.get("resources", []))
         website = {"title": cfg.get("title", "Wiki"), "favicon": "assets/favicon.svg", "page-navigation": True,
                    "bread-crumbs": False, "navbar": {"background": "#070b14", "left": nav}}
         if right:
@@ -421,6 +507,12 @@ class Site:
 
     def stage(self) -> dict:
         self.clean()
+        try:
+            return self._stage()
+        finally:
+            (self.site / MANIFEST).write_text("\n".join(self.written) + "\n", encoding="utf-8")
+
+    def _stage(self) -> dict:
         sidebar: list = [{"text": self.cfg.get("home_nav", "Briefing"), "href": "index.qmd"}]
         cards = [self.stage_chapter(c, sidebar) for c in self.cfg["chapters"]]
         extra_nav, n_adrs = [], 0
@@ -446,23 +538,31 @@ class Site:
             sidebar.append({"text": "Telemetry deck", "href": "telemetry.qmd"})
         if self.cfg.get("ledger"):
             sidebar.append({"text": self.cfg["ledger"].get("title", "Decision ledger"), "href": "decisions.qmd"})
-        (self.site / "_sidebar.yml").write_text(to_yaml({"website": {"sidebar": {
-            "style": "docked", "collapse-level": 1, "contents": sidebar}}}), encoding="utf-8")
-        (self.site / "_quarto.yml").write_text(self.quarto_yml(extra_nav), encoding="utf-8")
+        self.write("_sidebar.yml", to_yaml({"website": {"sidebar": {
+            "style": "docked", "collapse-level": 1, "contents": sidebar}}}))
+        self.write("_quarto.yml", self.quarto_yml(extra_nav))
         stats = {"chapters": len(self.cfg["chapters"]), "pages": sum(c.get("n", 0) for c in cards[:len(self.cfg["chapters"])]),
                  "decisions": n_adrs, "charts": len(self.cfg.get("charts", {})),
                  "plates_missing": sorted(wanted_plates(self.cfg) - self.plates)}
         return stats
 
     def clean(self) -> None:
-        for name in GENERATED_FILES + [c["key"] for c in self.cfg["chapters"]]:
-            p = self.site / name
-            if p.is_dir():
-                if not any(p.glob("*.qmd")) and any(p.iterdir()):
-                    raise WikiError(f"{p} holds files that are not staged pages; refusing to delete it")
-                shutil.rmtree(p)
-            elif p.exists():
+        """Delete what the last stage wrote (the manifest), then the directories it left empty. Nothing else."""
+        mf = self.site / MANIFEST
+        if not mf.exists():
+            return
+        dirs = set()
+        for rel in mf.read_text(encoding="utf-8").split():
+            p = (self.site / rel).resolve()
+            if self.site not in p.parents:
+                raise WikiError(f"{MANIFEST} names {rel!r}, outside the site; refusing")
+            if p.is_file():
                 p.unlink()
+            dirs |= {d for d in p.parents if self.site in d.parents}
+        for d in sorted(dirs, key=lambda d: -len(d.parts)):
+            if d.is_dir() and not any(d.iterdir()):
+                d.rmdir()
+        mf.unlink()
 
 
 def wanted_plates(cfg: dict) -> set:
@@ -504,7 +604,7 @@ def cmd_init(site: Path) -> int:
     gi = site / ".gitignore"
     if not gi.exists():
         gi.write_text("# staged by wiki.py: the sources are the truth\n" + "\n".join(
-            ["/_site/", "/.quarto/", "/*.qmd", "/_quarto.yml", "/_sidebar.yml", "/*/*.qmd"]) + "\n", encoding="utf-8")
+            ["/_site/", "/.quarto/", "/.wiki-staged", "/media/", "/*.qmd", "/_quarto.yml", "/_sidebar.yml", "/*/*.qmd"]) + "\n", encoding="utf-8")
         print(f"  wrote {gi}")
     return 0
 

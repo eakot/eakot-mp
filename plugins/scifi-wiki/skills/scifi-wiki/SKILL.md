@@ -81,12 +81,31 @@ the site directory.
   an unmapped section a lint error, so every new section gets its own art.
 - **`charts`.** `kind` is `line`, `stack` or `bars`. Also: `range` and `step` (`15m`, `1h`, `1d`, `1w`), `label`
   (which label names a series), `order` (a comma list that pins series order), `ref` plus `refname` (a dashed
-  threshold line), `unit`, and `panel` (a link to the dashboard panel the chart mirrors). The chart rules come
-  from the dataviz method: at most four series, then "other"; 2 px lines; direct labels plus a legend; a
-  crosshair tooltip; a table view.
-- **`briefing`.** These are SITREP lines in the form `label ..... value [OK/WARN/ACT]`. `of` adds a ` / total`.
-  `rule` is a comma list, for example `ok_if_ge:N`, `ok_if_le:N`, `warn_if_lt:N`, `act_if_ge:N,warn_if_ge:M`, or
-  `info`. `names` lists the series names under the sheet, for example the alerts that are firing.
+  threshold line), `unit`, and `panel` (a link to the dashboard panel the chart mirrors). Charts are drawn by
+  [uPlot](https://github.com/leeoniya/uPlot) 1.6.32, vendored under `assets/vendor/` with its MIT licence and
+  checksums. It is the same engine as Grafana's time-series panels: 22 KB gzipped, and it stays fast at 100k
+  points. A reader can zoom (drag across a chart, Ctrl+wheel or pinch), reset (double-click), hide a series
+  (click its legend entry), read every series at a point (the crosshair tooltip shows raw values, even on a stack)
+  and open the numbers as a table. The marks follow the dataviz method: at most four series, then "other";
+  2 px lines; direct end labels plus a legend.
+- **`briefing`.** This is the SITREP sheet, in the same grammar as `grafana-sitrep`. It opens with a verdict
+  line, followed by one contents line for each number: `label ..... value TAG`. The tags are `OK` (fine), `WARN`
+  (look), `ACT` (someone must act; it blinks), `INFO` (idle on purpose) and `N/D` (no data). An empty query result
+  is `N/D`, never 0. Write `or vector(0)` only where zero is true. The verdict names the move: it is the worst
+  line's `move` text, or `briefing_ok` when every line is fine. Each line takes:
+
+  | Field | Meaning |
+  |---|---|
+  | `q` | the query |
+  | `of` | a total, shown as ` / total` |
+  | `rule` | `ok_if_ge:N`, `ok_if_le:N`, `warn_if_lt:N`, `act_if_ge:N,warn_if_ge:M` or `info` |
+  | `steps` | sitrep's thresholds, e.g. `[[null,"ok"],[5,"warn"],[10,"bad"]]` |
+  | `fmt` | `int`, `pct`, `bytes` or `dur` |
+  | `unit` | appended to the value |
+  | `note` | a dim line under the contents line |
+  | `names` | a query whose series names are listed under the line, e.g. the firing alerts |
+
+  An entry `{"head": "ALARMS"}` is a sub-head. `briefing_title` names the sheet.
 - **`pages`.** These are hand-made `.qmd` pages that live in the site directory and get a card and a nav entry.
   Put their scripts under `resources`.
 
@@ -135,7 +154,22 @@ The charts and briefing run their PromQL from the **reader's browser**, so the s
 
 Do not point a public site at a private metrics endpoint. The query text is in the page source.
 
-## 5. Theme
+## 5. Relation to grafana-sitrep
+
+The two plugins share one reading grammar and one set of tag colours, so an operator reads them the same way:
+
+| | `grafana-sitrep` | `scifi-wiki` |
+|---|---|---|
+| Where it renders | inside Grafana (Business Text panels) | a static site: no server, no Grafana |
+| What it is for | the daily status page: is it going well, whose move is it | the system explained, with its numbers live beside the text |
+| Sheet | `brief()` + `ln()` + `sub()`, from `briefing_lib.js` | `briefing` in `wiki.json`: same verdict line, contents lines, tags and N/D rule |
+| History charts | Grafana's time-series panels (uPlot) | uPlot 1.6.32 in the page, with the same drag-zoom feel |
+| Graph views | `flow()`: rows of boxes | Mermaid blocks in the markdown |
+
+If the reader has Grafana and opens the page daily, use `grafana-sitrep`. If the page has to work without
+Grafana, or explains how the system works, use `scifi-wiki`. Link a wiki chart to its Grafana panel with `panel`.
+
+## 6. Theme
 
 The theme is dark and uses three fonts: Orbitron for headings, Exo 2 for body text and Share Tech Mono for HUD
 text. All three are vendored under the SIL OFL, so a page makes no third-party request. The corners are cut, a

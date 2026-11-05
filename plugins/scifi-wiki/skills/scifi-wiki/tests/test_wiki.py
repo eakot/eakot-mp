@@ -39,6 +39,19 @@ class Grammar(unittest.TestCase):
 
 
 class Lint(unittest.TestCase):
+    def test_non_latin_headings_have_slugs(self):
+        self.assertEqual(wiki.slugify("2. Питание (D4)"), "питание")
+        self.assertEqual([lv for lv, _ in wiki.lint_markdown("# Т\n\nи\n\n## Питание\n\nТекст.\n", "d.md")], [])
+
+    def test_dangling_relative_link_without_source_url(self):
+        with tempfile.TemporaryDirectory() as t:
+            site = site_copy(Path(t))
+            cfg = json.loads((site / "wiki.json").read_text())
+            cfg["source_url"] = ""
+            (site / "wiki.json").write_text(json.dumps(cfg))
+            found = wiki.lint(wiki.load_config(site / "wiki.json"))
+            self.assertTrue(any(lv == "error" and "source_url" in m for lv, m in found))
+
     def test_unclosed_fence_and_missing_title(self):
         found = wiki.lint_markdown("intro\n\n## A\n\n```\nx\n", "d.md")
         msgs = " ".join(m for _, m in found)
@@ -119,13 +132,30 @@ class Stage(unittest.TestCase):
         wiki.Site(self.cfg).stage()
         self.assertEqual(before, (self.site / "systems" / "02-power.qmd").read_text())
 
-    def test_refuses_to_delete_a_foreign_dir(self):
-        foreign = self.site / "systems"
-        shutil.rmtree(foreign)
-        foreign.mkdir()
-        (foreign / "notes.txt").write_text("mine")
+    def test_keeps_files_it_did_not_write(self):
+        (self.site / "systems" / "mine.qmd").write_text("mine")
+        (self.site / "systems" / "notes.txt").write_text("mine")
+        wiki.Site(self.cfg).stage()
+        self.assertEqual((self.site / "systems" / "mine.qmd").read_text(), "mine")
+        self.assertTrue((self.site / "systems" / "notes.txt").exists())
+
+    def test_refuses_to_overwrite_a_foreign_page(self):
+        (self.site / ".wiki-staged").write_text("")       # as if index.qmd were the user's own
         with self.assertRaises(wiki.WikiError):
             wiki.Site(self.cfg).stage()
+
+    def test_section_anchor_lands_on_its_page(self):
+        s = wiki.Site(self.cfg)
+        self.assertEqual(s.rewrite_link("ship-systems.md#2-power", "docs", 1), "../systems/02-power.html")
+        self.assertEqual(s.rewrite_link("#1-life-support", "docs", 1, "docs/ship-systems.md"),
+                         "../systems/01-life-support.html")
+
+    def test_relative_image_is_copied(self):
+        (self.site / "docs" / "img").mkdir()
+        (self.site / "docs" / "img" / "a.png").write_bytes(b"png")
+        s = wiki.Site(self.cfg)
+        self.assertEqual(s.rewrite("![x](img/a.png)", "docs", 1), "![x](../media/docs/img/a.png)")
+        self.assertTrue((self.site / "media" / "docs" / "img" / "a.png").exists())
 
     def test_html_attributes_are_escaped(self):
         page = (self.site / "index.qmd").read_text()

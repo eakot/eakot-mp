@@ -86,4 +86,20 @@ starfield void.
 | A Prometheus-compatible API that sends `Access-Control-Allow-Origin` | any | only the live charts and the briefing. VictoriaMetrics sends it by default; Prometheus needs a proxy |
 | [ComfyUI](https://github.com/comfyanonymous/ComfyUI) + Pillow | any current release, optional | only `scripts/plates.py`, which paints the mood plates. Without them the pages show a void pattern |
 
-The fonts (Orbitron, Exo 2 and Share Tech Mono, all SIL OFL) are vendored, so a page makes no third-party request.
+The fonts (Orbitron, Exo 2 and Share Tech Mono, all SIL OFL) and the chart engine
+([uPlot](https://github.com/leeoniya/uPlot) 1.6.32, MIT) are vendored, so a page makes no third-party request.
+
+## The two plugins, side by side
+
+`grafana-sitrep` and `scifi-wiki` speak one grammar. Both have a SITREP verdict that names the move, then contents
+lines (`label ..... value TAG`). The tags are `OK`, `WARN`, `ACT`, `INFO` and `N/D`, in the same colours in both,
+and no data is never shown as 0. Both draw history charts with uPlot, the engine behind Grafana's time-series
+panels.
+
+Choose by where the page has to live:
+
+- **`grafana-sitrep`:** inside Grafana, read daily.
+- **`scifi-wiki`:** a static site that explains the system and keeps working without Grafana.
+
+uPlot was chosen over Chart.js, ECharts, Plotly, Dygraphs, lightweight-charts and Observable Plot on bundle size and
+on render time and memory at 30k–300k points.
