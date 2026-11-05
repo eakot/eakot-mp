@@ -157,6 +157,14 @@ class Stage(unittest.TestCase):
         self.assertEqual(s.rewrite("![x](img/a.png)", "docs", 1), "![x](../media/docs/img/a.png)")
         self.assertTrue((self.site / "media" / "docs" / "img" / "a.png").exists())
 
+    def test_image_symlinked_out_of_root_is_not_copied(self):
+        outside = Path(self.tmp.name) / "secret.png"
+        outside.write_bytes(b"secret")
+        (self.site / "docs" / "leak.png").symlink_to(outside)
+        s = wiki.Site(self.cfg)
+        self.assertEqual(s.rewrite("![x](leak.png)", "docs", 1), "![x](leak.png)")
+        self.assertFalse((self.site / "media" / "docs" / "leak.png").exists())
+
     def test_html_attributes_are_escaped(self):
         page = (self.site / "index.qmd").read_text()
         self.assertIn('data-q="count(ALERTS{alertstate=&quot;firing&quot;}) or vector(0)"', page)

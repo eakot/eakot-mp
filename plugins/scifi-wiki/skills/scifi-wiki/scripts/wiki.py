@@ -310,8 +310,8 @@ class Site:
         if target.startswith(("http://", "https://", "data:", "/")):
             return target
         resolved = os.path.normpath(os.path.join(src_dir, target.partition("#")[0]))
-        src = self.root / resolved
-        if resolved.startswith("..") or not src.is_file():
+        src = (self.root / resolved).resolve()
+        if self.root.resolve() not in src.parents or not src.is_file():   # a symlink out of root is not published
             return target
         rel = f"media/{resolved}"
         if rel not in self.written:
