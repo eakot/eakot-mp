@@ -150,7 +150,7 @@
       padding: [8, multi ? 96 : 12, 0, 0],
       series: uSeries, bands,
       legend: { show: series.length > 1 || !!ref, live: false },
-      cursor: { drag: { x: true, y: false, setScale: true }, sync: { key: "scifi-wiki" }, points: { show: false } },
+      cursor: { drag: { x: true, y: false, setScale: true }, points: { show: false } },   // no sync group: charts on a page span different ranges
       scales: { x: { time: true }, y: { range: () => [0, d.unit === "%" && peak <= 100 ? 100 : peak > 0 ? peak * 1.08 : 1] } },
       axes: [
         { stroke: ink, font, grid: { stroke: grid, width: 1 }, ticks: { stroke: grid, width: 1 },

@@ -2,6 +2,6 @@
   "name": "scifi-wiki",
   "description": "Refactor a set of markdown documents into a sci-fi wiki: one Quarto site, a page per section, cards, a decision ledger, live PromQL charts and a sitrep briefing, derived from the sources and never hand-edited.",
   "author": { "name": "eakot" },
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "MIT"
 }
