@@ -1,0 +1,26 @@
+/* time-charts 1.0.0 — needs shared/theme.css and vendor/uPlot.min.css first. */
+.tc-title { font: 900 1.2rem var(--display); letter-spacing: .2em; color: var(--accent); text-transform: uppercase; margin: .2rem 0 .4rem; }
+.tc-notes { color: var(--dim); font: .75rem var(--mono); margin-bottom: .8rem; }
+.tc-deck { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 1.1rem; }
+@media (max-width: 560px) { .tc-deck { grid-template-columns: 1fr; } }
+figure.fc { position: relative; margin: 0; background: var(--deck); border: 1px solid var(--line); clip-path: var(--cut);
+  padding: .8rem 1rem .6rem; min-height: 230px; }
+.fc-head { display: flex; align-items: baseline; gap: .6rem; font-family: var(--mono); }
+.fc-title { flex: 1; color: var(--glow); text-transform: uppercase; letter-spacing: .08em; font-size: .82rem; }
+/* uPlot: dark legend, cyan drag-select, dashed crosshair */
+.fc-plot { margin-top: .3rem; }
+.fc-plot .u-legend { font: .76rem var(--mono); color: var(--ink); text-align: left; margin-top: .2rem; }
+.fc-plot .u-legend .u-series { padding: 0 .9rem 0 0; cursor: pointer; }
+.fc-plot .u-legend .u-marker { width: 10px; height: 10px; border-radius: 2px; margin-right: .35rem; }
+.fc-plot .u-legend .u-off > * { opacity: .35; }
+.fc-plot .u-select { background: #5fd4ff22; border-left: 1px solid var(--glow); border-right: 1px solid var(--glow); }
+.fc-plot .u-cursor-x { border-right: 1px dashed #8aa0ba88; }
+.fc-plot .u-cursor-y { display: none; }
+.fc-hint { font: .7rem var(--mono); color: var(--dim); text-align: right; opacity: .7; }
+.fc-tip { position: absolute; pointer-events: none; background: #070b14f2; border: 1px solid var(--t1); padding: .4rem .6rem;
+  font: .76rem var(--mono); color: var(--ink); white-space: nowrap; z-index: 5; display: none; }
+.fc-tip b { color: #fff; font-weight: 400; }
+.fc-offline { display: grid; place-items: center; min-height: 150px; font: .85rem var(--mono); color: var(--dim);
+  text-align: center; letter-spacing: .08em; }
+.fc-offline::before { content: "◌ "; color: var(--tag-warn); }
+figure.fc .sd-table { margin-top: .4rem; }

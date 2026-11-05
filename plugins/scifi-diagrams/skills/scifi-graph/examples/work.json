@@ -1,0 +1,524 @@
+{
+ "schema": "scifi-graph/1",
+ "title": "HELIX — refit plan",
+ "generated": "2301-06-24T08:00Z",
+ "currency": "USD",
+ "topics": [
+  {
+   "id": "life-support",
+   "label": "Life support"
+  },
+  {
+   "id": "propulsion",
+   "label": "Propulsion"
+  },
+  {
+   "id": "navigation",
+   "label": "Navigation"
+  },
+  {
+   "id": "crew",
+   "label": "Crew"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "helix#101",
+   "kind": "epic",
+   "parent": "adr:helix/0001",
+   "title": "Duty-cycle controller",
+   "state": "done",
+   "url": "https://example.org/helix/issues/101",
+   "topic": "life-support"
+  },
+  {
+   "id": "helix#102",
+   "kind": "task",
+   "parent": "helix#101",
+   "title": "Timer board for scrubber banks",
+   "state": "done",
+   "url": "https://example.org/helix/issues/102",
+   "topic": "life-support",
+   "cost": {
+    "actual": 5.55
+   },
+   "closed": "2301-04-22"
+  },
+  {
+   "id": "helix#103",
+   "kind": "task",
+   "parent": "helix#101",
+   "title": "Band sensor per deck",
+   "state": "done",
+   "url": "https://example.org/helix/issues/103",
+   "topic": "life-support",
+   "cost": {
+    "actual": 9.64
+   },
+   "closed": "2301-04-27"
+  },
+  {
+   "id": "helix#104",
+   "kind": "task",
+   "parent": "helix#101",
+   "title": "Fail-over to the spare bank",
+   "state": "done",
+   "url": "https://example.org/helix/issues/104",
+   "topic": "life-support",
+   "cost": {
+    "actual": 8.78
+   },
+   "closed": "2301-06-16"
+  },
+  {
+   "id": "helix#105",
+   "kind": "task",
+   "parent": "helix#101",
+   "title": "Wear log per scrubber",
+   "state": "done",
+   "url": "https://example.org/helix/issues/105",
+   "topic": "life-support",
+   "cost": {
+    "actual": 6.92
+   },
+   "closed": "2301-04-17"
+  },
+  {
+   "id": "helix#106",
+   "kind": "epic",
+   "parent": "adr:helix/0002",
+   "title": "Vane actuators",
+   "state": "done",
+   "url": "https://example.org/helix/issues/106",
+   "topic": "life-support"
+  },
+  {
+   "id": "helix#107",
+   "kind": "task",
+   "parent": "helix#106",
+   "title": "Actuator survey",
+   "state": "done",
+   "url": "https://example.org/helix/issues/107",
+   "topic": "life-support",
+   "cost": {
+    "actual": 6.81
+   },
+   "closed": "2301-06-13"
+  },
+  {
+   "id": "helix#108",
+   "kind": "task",
+   "parent": "helix#106",
+   "title": "Replace port vane motors",
+   "state": "done",
+   "url": "https://example.org/helix/issues/108",
+   "topic": "life-support",
+   "cost": {
+    "actual": 13.34
+   },
+   "closed": "2301-06-28"
+  },
+  {
+   "id": "helix#109",
+   "kind": "task",
+   "parent": "helix#106",
+   "title": "Replace starboard vane motors",
+   "state": "done",
+   "url": "https://example.org/helix/issues/109",
+   "topic": "life-support",
+   "cost": {
+    "actual": 8.71
+   },
+   "closed": "2301-05-11"
+  },
+  {
+   "id": "helix#110",
+   "kind": "epic",
+   "parent": "adr:helix/0002",
+   "title": "Thermal control law",
+   "state": "done",
+   "url": "https://example.org/helix/issues/110",
+   "topic": "life-support"
+  },
+  {
+   "id": "helix#111",
+   "kind": "task",
+   "parent": "helix#110",
+   "title": "Hull temperature model",
+   "state": "done",
+   "url": "https://example.org/helix/issues/111",
+   "topic": "life-support",
+   "cost": {
+    "actual": 2.08
+   },
+   "closed": "2301-04-19"
+  },
+  {
+   "id": "helix#112",
+   "kind": "task",
+   "parent": "helix#110",
+   "title": "Controller with hand override",
+   "state": "done",
+   "url": "https://example.org/helix/issues/112",
+   "topic": "life-support",
+   "cost": {
+    "actual": 6.74
+   },
+   "closed": "2301-06-13"
+  },
+  {
+   "id": "helix#113",
+   "kind": "task",
+   "parent": "helix#110",
+   "title": "Soak test, 72 h",
+   "state": "done",
+   "url": "https://example.org/helix/issues/113",
+   "topic": "life-support",
+   "cost": {
+    "actual": 8.5
+   },
+   "closed": "2301-06-15"
+  },
+  {
+   "id": "helix#114",
+   "kind": "epic",
+   "parent": "adr:helix/0003",
+   "title": "Drive power",
+   "state": "open",
+   "url": "https://example.org/helix/issues/114",
+   "topic": "propulsion"
+  },
+  {
+   "id": "helix#115",
+   "kind": "task",
+   "parent": "helix#114",
+   "title": "Reactor output headroom study",
+   "state": "done",
+   "url": "https://example.org/helix/issues/115",
+   "topic": "propulsion",
+   "cost": {
+    "actual": 8.64
+   },
+   "closed": "2301-04-21"
+  },
+  {
+   "id": "helix#116",
+   "kind": "task",
+   "parent": "helix#114",
+   "title": "Bus upgrade to 2 MW",
+   "state": "active",
+   "url": "https://example.org/helix/issues/116",
+   "topic": "propulsion"
+  },
+  {
+   "id": "helix#117",
+   "kind": "task",
+   "parent": "helix#114",
+   "title": "Breaker coordination",
+   "state": "open",
+   "url": "https://example.org/helix/issues/117",
+   "topic": "propulsion"
+  },
+  {
+   "id": "helix#118",
+   "kind": "task",
+   "parent": "helix#114",
+   "title": "Power-on test at 10 %",
+   "state": "open",
+   "url": "https://example.org/helix/issues/118",
+   "topic": "propulsion"
+  },
+  {
+   "id": "helix#119",
+   "kind": "epic",
+   "parent": "adr:helix/0003",
+   "title": "Burn profile",
+   "state": "open",
+   "url": "https://example.org/helix/issues/119",
+   "topic": "propulsion"
+  },
+  {
+   "id": "helix#120",
+   "kind": "task",
+   "parent": "helix#119",
+   "title": "Continuous-burn trajectory solver",
+   "state": "done",
+   "url": "https://example.org/helix/issues/120",
+   "topic": "propulsion",
+   "cost": {
+    "actual": 9.24
+   },
+   "closed": "2301-05-27"
+  },
+  {
+   "id": "helix#121",
+   "kind": "task",
+   "parent": "helix#119",
+   "title": "Reaction-mass budget per voyage",
+   "state": "open",
+   "url": "https://example.org/helix/issues/121",
+   "topic": "propulsion"
+  },
+  {
+   "id": "helix#122",
+   "kind": "task",
+   "parent": "helix#119",
+   "title": "Abort profile",
+   "state": "open",
+   "url": "https://example.org/helix/issues/122",
+   "topic": "propulsion"
+  },
+  {
+   "id": "helix#123",
+   "kind": "epic",
+   "parent": "adr:helix/0003",
+   "title": "Heat path",
+   "state": "open",
+   "url": "https://example.org/helix/issues/123",
+   "topic": "propulsion"
+  },
+  {
+   "id": "helix#124",
+   "kind": "task",
+   "parent": "helix#123",
+   "title": "Drive heat into the thermal loop",
+   "state": "open",
+   "url": "https://example.org/helix/issues/124",
+   "topic": "propulsion"
+  },
+  {
+   "id": "helix#125",
+   "kind": "task",
+   "parent": "helix#123",
+   "title": "Radiator area check",
+   "state": "open",
+   "url": "https://example.org/helix/issues/125",
+   "topic": "propulsion"
+  },
+  {
+   "id": "helix#126",
+   "kind": "epic",
+   "parent": "adr:helix/0004",
+   "title": "Tracker hardware",
+   "state": "open",
+   "url": "https://example.org/helix/issues/126",
+   "topic": "navigation"
+  },
+  {
+   "id": "helix#127",
+   "kind": "task",
+   "parent": "helix#126",
+   "title": "Mount survey",
+   "state": "done",
+   "url": "https://example.org/helix/issues/127",
+   "topic": "navigation",
+   "cost": {
+    "actual": 7.16
+   },
+   "closed": "2301-05-17"
+  },
+  {
+   "id": "helix#128",
+   "kind": "task",
+   "parent": "helix#126",
+   "title": "Install tracker A",
+   "state": "open",
+   "url": "https://example.org/helix/issues/128",
+   "topic": "navigation"
+  },
+  {
+   "id": "helix#129",
+   "kind": "task",
+   "parent": "helix#126",
+   "title": "Install tracker B",
+   "state": "open",
+   "url": "https://example.org/helix/issues/129",
+   "topic": "navigation"
+  },
+  {
+   "id": "helix#130",
+   "kind": "task",
+   "parent": "helix#126",
+   "title": "Install tracker C",
+   "state": "open",
+   "url": "https://example.org/helix/issues/130",
+   "topic": "navigation"
+  },
+  {
+   "id": "helix#131",
+   "kind": "epic",
+   "parent": "adr:helix/0004",
+   "title": "Voting software",
+   "state": "open",
+   "url": "https://example.org/helix/issues/131",
+   "topic": "navigation"
+  },
+  {
+   "id": "helix#132",
+   "kind": "task",
+   "parent": "helix#131",
+   "title": "Star catalogue load",
+   "state": "open",
+   "url": "https://example.org/helix/issues/132",
+   "topic": "navigation"
+  },
+  {
+   "id": "helix#133",
+   "kind": "task",
+   "parent": "helix#131",
+   "title": "Two-of-three vote",
+   "state": "open",
+   "url": "https://example.org/helix/issues/133",
+   "topic": "navigation"
+  },
+  {
+   "id": "helix#134",
+   "kind": "task",
+   "parent": "helix#131",
+   "title": "Audit against ground fixes",
+   "state": "open",
+   "url": "https://example.org/helix/issues/134",
+   "topic": "navigation"
+  },
+  {
+   "id": "helix#135",
+   "kind": "epic",
+   "parent": "adr:helix/0005",
+   "title": "Watch schedule",
+   "state": "open",
+   "url": "https://example.org/helix/issues/135",
+   "topic": "crew"
+  },
+  {
+   "id": "helix#136",
+   "kind": "task",
+   "parent": "helix#135",
+   "title": "Draft three-watch roster",
+   "state": "done",
+   "url": "https://example.org/helix/issues/136",
+   "topic": "crew",
+   "cost": {
+    "actual": 4.55
+   },
+   "closed": "2301-06-19"
+  },
+  {
+   "id": "helix#137",
+   "kind": "task",
+   "parent": "helix#135",
+   "title": "Move scrubber check to watch change",
+   "state": "open",
+   "url": "https://example.org/helix/issues/137",
+   "topic": "crew"
+  },
+  {
+   "id": "helix#138",
+   "kind": "task",
+   "parent": "helix#135",
+   "title": "Station training plan",
+   "state": "open",
+   "url": "https://example.org/helix/issues/138",
+   "topic": "crew"
+  }
+ ],
+ "edges": [
+  {
+   "from": "helix#102",
+   "to": "helix#103",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#103",
+   "to": "helix#104",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#104",
+   "to": "helix#105",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#111",
+   "to": "helix#112",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#112",
+   "to": "helix#113",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#115",
+   "to": "helix#116",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#117",
+   "to": "helix#118",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#120",
+   "to": "helix#121",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#121",
+   "to": "helix#122",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#124",
+   "to": "helix#125",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#127",
+   "to": "helix#128",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#127",
+   "to": "helix#129",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#127",
+   "to": "helix#130",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#133",
+   "to": "helix#134",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#136",
+   "to": "helix#137",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#110",
+   "to": "helix#124",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#116",
+   "to": "helix#128",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#133",
+   "to": "helix#122",
+   "kind": "needs"
+  },
+  {
+   "from": "helix#130",
+   "to": "helix#133",
+   "kind": "needs"
+  }
+ ],
+ "notes": [
+  "Example data: a fictional ship's refit. Costs are what each task's agent sessions cost; 6 % of spend named no task and is not attributed."
+ ]
+}

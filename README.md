@@ -6,13 +6,13 @@ worth sharing. Every plugin here works in any repository and names none.
 ```
 /plugin marketplace add eakot/eakot-mp
 /plugin install grafana-sitrep@eakot-mp
-/plugin install scifi-wiki@eakot-mp
+/plugin install scifi-diagrams@eakot-mp
 ```
 
 | Plugin | What it does |
 |---|---|
 | [`grafana-sitrep`](plugins/grafana-sitrep/skills/sitrep-dashboard/SKILL.md) | Refactors a Grafana dashboard into "sitrep" status sheets: a monospace mission briefing whose first line is the verdict and the move, then a table of contents of every number (`label ..... value [OK/WARN/ACT]`), every repo, PR, issue, commit and workflow a link, beside history charts that cannot draw an impossible peak. The agent works in the operator's role: it asks the questions a reader asks of each panel and answers them from live data, and brings the human only the rulings (thresholds, what "today" means, what idle is intended). Needs Grafana 11.3 and the Business Text panel: see [requirements](#grafana-sitrep-requirements). |
-| [`scifi-wiki`](plugins/scifi-wiki/skills/scifi-wiki/SKILL.md) | Refactors a set of markdown documents into a sci-fi wiki: one static Quarto site with a page per `##` section, chapter cards built from each section's first sentence, a ledger of the decision records the chapters cite, and optional live PromQL charts and a SITREP briefing that run in the reader's browser. The markdown stays the truth: `wiki.py lint` checks it against the wiki grammar, and the site is rebuilt from it, never edited. Needs Python 3.9 and Quarto 1.4: see [requirements](#scifi-wiki-requirements). |
+| [`scifi-diagrams`](#scifi-diagrams) | Three diagram skills, each a self-contained, zoomable sci-fi HTML page built from one JSON file: [`scifi-graph`](plugins/scifi-diagrams/skills/scifi-graph/SKILL.md) draws a plan as an RPG skill tree. Decision records are the goals (point B), each with the gains it unlocks, and the work leading to them is shown done (lit) or still to do (dim), with the actual cost or ≈estimate of every node. Each zoom step opens one more level, from goals to epics to tasks. [`goal-map`](plugins/scifi-diagrams/skills/goal-map/SKILL.md) is a star map of how far along each goal is. [`time-charts`](plugins/scifi-diagrams/skills/time-charts/SKILL.md) is uPlot history charts with drag, wheel and pinch zoom. Needs Python 3.9 only. |
 
 ### `grafana-sitrep` requirements
 
@@ -70,36 +70,41 @@ sense in one repository belongs in that repository's `.claude/`, not here.
 
 MIT — see [LICENSE](LICENSE).
 
-## `scifi-wiki`
+## `scifi-diagrams`
 
-![A scifi-wiki chapter index: the chapter's intro, then one card per section with its first sentence](docs/scifi-wiki-chapter.png)
+![scifi-graph at L0: goal regions in topic bands, each with its gains, progress, cost spent and ≈cost to go](docs/scifi-graph-l0.png)
 
-A chapter index from the bundled example (`examples/`). It has no plates yet, so each picture slot shows the
-starfield void.
+![scifi-graph at L2: a goal opened into epics and task cards, each with its state and its actual or ≈estimated cost](docs/scifi-graph-l2.png)
 
-### `scifi-wiki` requirements
+`scifi-graph` on the bundled example (HELIX, a fictional ship's refit), at the first zoom and at task level.
+
+| Skill | Reads | Answers |
+|---|---|---|
+| `scifi-graph` | `scifi-graph/1`: goals, epics and tasks, their dependencies, costs and gains. `scifi_graph.py adrs` builds the goals straight from a directory of decision records | What leads to what? What is unlocked, what can start now, what waits on what, and what is left to pay? |
+| `goal-map` | `goal-map/1`: goals with sub-issue counts | How far along is each goal, by topic? |
+| `time-charts` | `time-charts/1`: time series, or live PromQL in the browser | How did it move over time? |
+
+### `scifi-diagrams` requirements
 
 | Component | Version | Needed for |
 |---|---|---|
-| Python | **3.9** or later, standard library only | `scripts/wiki.py` (init, scaffold, lint, stage, check) |
-| [Quarto](https://quarto.org) | **1.4** or later (tested on 1.9) | `wiki.py build`, which renders the staged pages to `_site/` |
-| A Prometheus-compatible API that sends `Access-Control-Allow-Origin` | any | only the live charts and the briefing. VictoriaMetrics sends it by default; Prometheus needs a proxy |
-| [ComfyUI](https://github.com/comfyanonymous/ComfyUI) + Pillow | any current release, optional | only `scripts/plates.py`, which paints the mood plates. Without them the pages show a void pattern |
+| Python | **3.9** or later, standard library only | every `check` and `build` |
+| Node.js | any current release, optional | only the renderer tests, which run each layout's pure half |
+| A Chromium browser | optional | only screenshots. Every page also has a table view |
 
-The fonts (Orbitron, Exo 2 and Share Tech Mono, all SIL OFL) and the chart engine
-([uPlot](https://github.com/leeoniya/uPlot) 1.6.32, MIT) are vendored, so a page makes no third-party request.
+Each page is one HTML file and makes no network request. The fonts (Orbitron, Exo 2 and Share Tech Mono, all SIL
+OFL) and [uPlot](https://github.com/leeoniya/uPlot) 1.6.32 (MIT) are vendored and inlined.
 
 ## The two plugins, side by side
 
-`grafana-sitrep` and `scifi-wiki` speak one grammar. Both have a SITREP verdict that names the move, then contents
-lines (`label ..... value TAG`). The tags are `OK`, `WARN`, `ACT`, `INFO` and `N/D`, in the same colours in both,
-and no data is never shown as 0. Both draw history charts with uPlot, the engine behind Grafana's time-series
-panels.
+`grafana-sitrep` and `scifi-diagrams` share one rule for numbers: no data shows as `N/D`, never as 0, and a total
+counts its unknown parts instead of hiding them. They also share the status colours. Both draw history charts with
+uPlot, the engine behind Grafana's time-series panels.
 
 Choose by where the page has to live:
 
 - **`grafana-sitrep`:** inside Grafana, read daily.
-- **`scifi-wiki`:** a static site that explains the system and keeps working without Grafana.
+- **`scifi-diagrams`:** a single file you can open anywhere, or embed in any site.
 
 uPlot was chosen over Chart.js, ECharts, Plotly, Dygraphs, lightweight-charts and Observable Plot on bundle size and
 on render time and memory at 30k–300k points.

@@ -1,0 +1,9 @@
+{
+  "name": "scifi-diagrams",
+  "description": "Diagram skills, each a self-contained, zoomable sci-fi HTML page from one JSON file: scifi-graph (the plan as an RPG skill tree — goals as point B with their gains, dependencies past and future, the ≈cost of every node, more detail at each zoom step), goal-map (a star map of goal progress), time-charts (uPlot history charts).",
+  "author": {
+    "name": "eakot"
+  },
+  "version": "1.0.0",
+  "license": "MIT"
+}

@@ -14,7 +14,7 @@ A sitrep page answers the operator's questions in the order that missing one wou
 
 Big digits, gauges and rows of stat tiles are replaced, not restyled.
 
-The same sheet grammar, tags and N/D rule run outside Grafana in the `scifi-wiki` plugin's `briefing`.
+The same N/D rule and status colours carry over to the `scifi-diagrams` plugin's pages, which run outside Grafana.
 Use it when a page has to be a static site, such as a system explained beside its live numbers.
 
 ```
