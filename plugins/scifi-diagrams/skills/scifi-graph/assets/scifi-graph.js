@@ -1,4 +1,4 @@
-/* scifi-graph 1.0.0 — a plan drawn as an RPG skill tree (schema scifi-graph/1). MIT, no dependencies.
+/* scifi-graph 1.0.1 — a plan drawn as an RPG skill tree (schema scifi-graph/1). MIT, no dependencies.
  *
  *   SciFiGraph.render(hostElement, graph)   draws the map, the HUD, the readout and the table view
  *   SciFiGraph.prepare(graph)                the pure half (states, roll-ups, layout), usable from Node
@@ -12,7 +12,7 @@
   if (typeof module === "object" && module.exports) module.exports = api; else root.SciFiGraph = api;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
-  const VERSION = "1.0.0";
+  const VERSION = "1.0.1";
   const SLOTS = 6;                                  // topic hues, fixed order; the 7th topic and later are "other"
   const ORDER = { unlocked: 0, active: 1, available: 2, locked: 3 };
   const WORD = { unlocked: "UNLOCKED", active: "ACTIVE", available: "AVAILABLE", locked: "LOCKED" };
@@ -356,7 +356,7 @@
           <div class="sg-level"></div><div class="sg-tip" role="tooltip"></div>
           <div class="sg-legend">${["unlocked", "active", "available", "locked"].map(s => `<span class="st-${s}"><i>${ICON[s]}</i>${WORD[s]}</span>`).join("")}<span class="sg-lg-edge">─ prerequisite done</span><span class="sg-lg-edge dim">┄ prerequisite open</span></div>
         </div>
-        <aside class="sg-readout"><div class="sg-readout-head">READOUT</div><div class="sg-readout-body"></div></aside>
+        <div class="sg-readout" role="complementary" aria-label="Readout"><div class="sg-readout-head">READOUT</div><div class="sg-readout-body"></div></div>
       </div>
       <details class="sd-table"><summary>TABLE VIEW · ${m.nodes.size} nodes</summary><div class="sg-table-body"></div></details>`;
     const $ = s => host.querySelector(s);
@@ -616,15 +616,18 @@
     const ro = $(".sg-readout-body");
     const link = n => { const u = safeUrl(n.url); return u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(n.label || shortId(n.id))} ↗</a>` : esc(n.label || shortId(n.id)); };
     const item = n => `<li class="st-${n.tree}" data-id="${esc(n.id)}"><span>${ICON[n.tree]}</span> ${link(n)} ${esc(n.title || "")}</li>`;
+    // what is left before a goal unlocks: its ≈cost, N/D, or — work all done — only the decision itself
+    const toGo = q => (!q.roll.leaves ? "NO WORK FILED" : q.roll.leaves === q.roll.doneLeaves ? "WORK DONE · decide"
+      : q.roll.togoNd && !q.roll.togo ? "N/D" : "≈" + money(q.roll.togo) + (q.roll.togoNd ? ` +${q.roll.togoNd} N/D` : ""));
     function select(n) {
       svg.querySelectorAll(".is-selected").forEach(x => x.classList.remove("is-selected"));
       if (!n) {
         const next = [...m.nodes.values()].filter(q => q.kind === "goal" && q.tree !== "unlocked")
-          .sort((a, b) => (a.roll.togoNd - b.roll.togoNd) || (a.roll.togo - b.roll.togo) || (b.points - a.points));
+          .sort((a, b) => ((!a.roll.leaves) - (!b.roll.leaves)) || (a.roll.togoNd - b.roll.togoNd) || (a.roll.togo - b.roll.togo) || (b.points - a.points));
         ro.innerHTML = `<p class="sg-hint">Each goal is a <b>point B</b>: the gains it unlocks and the work that leads to it. Lit = done (the past), dim = still to do (the future). Zoom in and every region opens one level: goals → epics → tasks.</p>`
           + `<p class="sg-hint">Drag to pan · wheel or pinch to zoom · double-click or <kbd>Enter</kbd> to fly in · <kbd>Esc</kbd> out · <kbd>0</kbd> fit.</p>`
           + `<div class="sg-ro-sub">NEAREST UNLOCKS — least ≈cost to go</div><ol class="sg-list">${next.slice(0, 10).map(q =>
-              `<li data-id="${esc(q.id)}"><i class="sd-sw" style="background:${hue(q)}"></i>${q.roll.togoNd ? "N/D" : "≈" + money(q.roll.togo)} · ${q.points ? "+" + q.points + " pts · " : ""}${esc(q.title || q.id)}</li>`).join("")}</ol>`;
+              `<li data-id="${esc(q.id)}"><i class="sd-sw" style="background:${hue(q)}"></i>${toGo(q)} · ${q.points ? "+" + q.points + " pts · " : ""}${esc(q.title || q.id)}</li>`).join("")}</ol>`;
       } else {
         n.el.classList.add("is-selected");
         const path = []; for (let a = n.up; a; a = a.up) path.unshift(a);

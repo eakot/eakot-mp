@@ -302,5 +302,18 @@ console.log(JSON.stringify({{nodes: out, totals: m.totals, bands: m.bands.map(b 
         self.prepare(g)                                             # no hang, no throw
 
 
+
+class Readout(unittest.TestCase):
+    def test_readout_is_not_an_aside(self):
+        """Host page styles move every <aside> out of the map grid (Quarto: to the margin column)."""
+        js = (Path(__file__).resolve().parents[1] / "assets" / "scifi-graph.js").read_text(encoding="utf-8")
+        self.assertNotIn("<aside", js)
+        self.assertIn('role="complementary"', js)
+
+    def test_nearest_unlocks_never_show_zero_for_finished_or_empty_goals(self):
+        js = (Path(__file__).resolve().parents[1] / "assets" / "scifi-graph.js").read_text(encoding="utf-8")
+        self.assertIn('"WORK DONE · decide"', js)
+        self.assertIn('"NO WORK FILED"', js)
+
 if __name__ == "__main__":
     unittest.main()

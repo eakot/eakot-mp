@@ -115,5 +115,13 @@ class Prepare(unittest.TestCase):
         self.assertTrue(all(g["parent"] == "" or g["parent"] in ("1", "2") for g in self.run_node(d)["goals"]))
 
 
+
+class Readout(unittest.TestCase):
+    def test_readout_is_not_an_aside(self):
+        """Host page styles move every <aside> out of the map grid (Quarto: to the margin column)."""
+        js = (Path(__file__).resolve().parents[1] / "assets" / "goal-map.js").read_text(encoding="utf-8")
+        self.assertNotIn("<aside", js)
+        self.assertIn('role="complementary"', js)
+
 if __name__ == "__main__":
     unittest.main()

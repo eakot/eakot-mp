@@ -1,4 +1,4 @@
-/* goal-map 1.0.0 — goals as a pan/zoom star map (schema goal-map/1). MIT, no dependencies.
+/* goal-map 1.0.1 — goals as a pan/zoom star map (schema goal-map/1). MIT, no dependencies.
 
      GoalMap.render(hostElement, data)   draws the map, the HUD, the readout and the table view
      GoalMap.prepare(data)               the pure half (topics, progress, layout), usable from Node
@@ -11,7 +11,7 @@
   if (typeof module === "object" && module.exports) module.exports = api; else root.GoalMap = api;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
-  const VERSION = "1.0.0";
+  const VERSION = "1.0.1";
   const SLOTS = 6;
   const WORLD = 1320, R_CORE = 70, R_IN = 120, R_OUT = 500;
 
@@ -138,7 +138,7 @@
       ${(data.notes || []).length ? `<div class="gm-notes">${data.notes.map(s => `<div>${esc(s)}</div>`).join("")}</div>` : ""}
       <div class="gm-main"><div class="gm-map" tabindex="0" aria-label="Goal map. Drag to pan, wheel or pinch to zoom, double-click to fly in, 0 to reset.">
         <div class="gm-canvas"></div><span class="gm-zoom"></span><div class="gm-tip" role="tooltip"></div></div>
-        <aside class="gm-readout" aria-label="Goal readout"><div class="gm-readout-head">READOUT</div><div class="gm-readout-body"></div></aside></div>
+        <div class="gm-readout" role="complementary" aria-label="Goal readout"><div class="gm-readout-head">READOUT</div><div class="gm-readout-body"></div></div></div>
       <details class="sd-table"><summary>TABLE VIEW · ${goals.length} goals</summary><div class="gm-table-body"></div></details>`;
     const $ = s => host.querySelector(s);
     const box = $(".gm-canvas");
