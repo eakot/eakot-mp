@@ -1,0 +1,17 @@
+{
+  "title": "WIKI // name",
+  "subtitle": "One line on what this system is",
+  "root": "..",
+  "source_url": "https://github.com/OWNER/REPO/blob/main/",
+  "repo_url": "https://github.com/OWNER/REPO",
+  "plate": "hero",
+  "chapters": [
+    {
+      "key": "overview",
+      "file": "doc/overview.md",
+      "nav": "Overview",
+      "plate": "overview",
+      "sections": {}
+    }
+  ]
+}

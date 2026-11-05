@@ -1,0 +1,258 @@
+<script>
+/* scifi-wiki live layer: every chart and briefing row runs its PromQL from this browser against the
+   Prometheus-compatible API in its data-vm attribute (the server must send Access-Control-Allow-Origin). No library; marks follow the dataviz rules (2px lines, ≤ 4 series then
+   "other", legend + direct labels, crosshair tooltip, table view, recessive grid). */
+(() => {
+  const SLOTS = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)"];
+  const OTHER = "var(--s-other)";
+  const SEC = { m: 60, h: 3600, d: 86400 };
+  const dur = s => parseInt(s, 10) * SEC[s.slice(-1)];
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs = {}, parent) => {
+    const n = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    if (parent) parent.appendChild(n);
+    return n;
+  };
+  const fmt = v => v == null || isNaN(v) ? "–" : Math.abs(v) >= 100 ? Math.round(v).toString()
+    : Math.abs(v) >= 10 ? v.toFixed(1).replace(/\.0$/, "") : v.toFixed(2).replace(/\.?0+$/, "");
+  const day = t => new Date(t * 1000).toISOString().slice(5, 10);
+  const hour = t => new Date(t * 1000).toISOString().slice(11, 16) + "Z";
+
+  async function vm(base, path, params) {
+    const r = await fetch(`${base}${path}?${new URLSearchParams(params)}`, { mode: "cors" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    if (j.status !== "success") throw new Error(j.error || "query failed");
+    return j.data.result;
+  }
+
+  // ---- series shaping --------------------------------------------------------------------
+  function shape(result, d, xs) {
+    const label = d.label;
+    let series = result.map(r => {
+      const m = new Map(r.values.map(([t, v]) => [Math.round(t), parseFloat(v)]));
+      const vals = xs.map(t => (m.has(t) ? m.get(t) : null));
+      return { name: label ? (r.metric[label] || "∅") : (d.title.split(",")[0]), vals,
+               total: vals.reduce((a, b) => a + (b || 0), 0) };
+    }).filter(s => s.total !== 0 || result.length === 1);
+    const order = (d.order || "").split(",").filter(Boolean);
+    series.sort((a, b) => {
+      const ia = order.indexOf(a.name), ib = order.indexOf(b.name);
+      if (ia >= 0 || ib >= 0) return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      return b.total - a.total;
+    });
+    if (series.length > 4) {               // fold, never generate a 5th hue
+      const rest = series.slice(3);
+      const other = { name: `other (${rest.length})`, other: true,
+        vals: xs.map((_, i) => rest.reduce((a, s) => a + (s.vals[i] || 0), 0)), total: 0 };
+      series = series.slice(0, 3).concat(other);
+    }
+    series.forEach((s, i) => { s.color = s.other ? OTHER : SLOTS[i]; });
+    return series;
+  }
+
+  function niceStep(v) {                 // 1 · 2 · 2.5 · 5 × 10^k, at least 1 for counts
+    if (v <= 0) return 1;
+    const p = Math.pow(10, Math.floor(Math.log10(v))), n = v / p;
+    return Math.max(v < 1 ? 0 : 1, (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p) || 0.25;
+  }
+
+  // ---- drawing ---------------------------------------------------------------------------
+  function draw(fig, d, xs, series, ref) {
+    const compact = fig.classList.contains("fc-compact");
+    const W = 640, H = compact ? 150 : 230, L = 36, R = series.length > 1 && d.kind === "line" ? 92 : 14, T = 8, B = 22;
+    const iw = W - L - R, ih = H - T - B;
+    const stacked = d.kind !== "line";
+    const tops = xs.map((_, i) => stacked ? series.reduce((a, s) => a + (s.vals[i] || 0), 0)
+                                          : Math.max(0, ...series.map(s => s.vals[i] || 0)));
+    const peak = Math.max(...tops, ref ? Math.max(...ref.filter(v => v != null)) : 0, d.unit === "%" ? 0 : 1);
+    const ystep = niceStep(peak / 4), ymax = d.unit === "%" && peak <= 100 ? 100 : ystep * Math.ceil((peak * 1.02) / ystep);
+    const yticks = Math.round(ymax / (d.unit === "%" && peak <= 100 ? 25 : ystep));
+    const x = i => L + (xs.length === 1 ? iw / 2 : (i / (xs.length - 1)) * iw);
+    const y = v => T + ih - (v / ymax) * ih;
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": d.title });
+    const grid = el("g", { class: "grid" }, svg), axis = el("g", { class: "axis" }, svg);
+    for (let k = 0; k <= yticks; k++) {
+      const v = (ymax * k) / yticks;
+      el("line", { x1: L, x2: W - R, y1: y(v), y2: y(v) }, grid);
+      el("text", { x: L - 6, y: y(v) + 3, "text-anchor": "end" }, axis).textContent = fmt(v);
+    }
+    const span = xs[xs.length - 1] - xs[0], every = Math.max(1, Math.ceil(xs.length / 7));
+    xs.forEach((t, i) => {
+      if (i % every) return;
+      el("text", { x: x(i), y: H - 6, "text-anchor": "middle" }, axis).textContent = span > 2 * 86400 ? day(t) : hour(t);
+    });
+
+    if (d.kind === "bars") {
+      const bw = Math.max(2, iw / xs.length - 2);      // 2px surface gap between bars
+      xs.forEach((_, i) => {
+        let acc = 0;
+        series.forEach(s => {
+          const v = s.vals[i] || 0; if (!v) return;
+          const y0 = y(acc), y1 = y(acc + v); acc += v;
+          el("rect", { x: x(i) - bw / 2, y: y1, width: bw, height: Math.max(0, y0 - y1 - (acc > v ? 1 : 0)),
+                       rx: 2, fill: s.color }, svg);
+        });
+      });
+    } else if (d.kind === "stack") {
+      const base = xs.map(() => 0);
+      series.forEach(s => {
+        const top = xs.map((_, i) => base[i] + (s.vals[i] || 0));
+        const pts = xs.map((_, i) => `${x(i)},${y(top[i])}`).join(" ");
+        const back = xs.map((_, i) => `${x(xs.length - 1 - i)},${y(base[xs.length - 1 - i])}`).join(" ");
+        el("polygon", { points: `${pts} ${back}`, fill: s.color, "fill-opacity": .55, stroke: s.color, "stroke-width": 1.5 }, svg);
+        top.forEach((v, i) => { base[i] = v; });
+      });
+    } else {
+      series.forEach(s => {
+        let dstr = "", pen = false;
+        s.vals.forEach((v, i) => { if (v == null) { pen = false; return; } dstr += `${pen ? "L" : "M"}${x(i)},${y(v)}`; pen = true; });
+        el("path", { d: dstr, fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+      });
+      if (series.length > 1) {              // direct labels at the line ends, nudged apart
+        const ends = series.map(s => {
+          const i = s.vals.map((v, k) => (v == null ? -1 : k)).filter(k => k >= 0).pop();
+          return { s, yy: i == null ? T : y(s.vals[i]) };
+        }).sort((a, b) => a.yy - b.yy);
+        ends.forEach((e, k) => { if (k && e.yy - ends[k - 1].yy < 12) e.yy = ends[k - 1].yy + 12; });
+        ends.forEach(e => {
+          const t = el("text", { x: W - R + 6, y: e.yy + 3, class: "dlabel" }, svg);
+          t.textContent = e.s.name.length > 13 ? e.s.name.slice(0, 12) + "…" : e.s.name;
+        });
+      }
+    }
+    if (ref) {
+      const v = ref.filter(r => r != null).pop();
+      if (v != null) {
+        el("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), class: "ref" }, svg);
+        el("text", { x: L + 4, y: y(v) - 4, class: "ref-label" }, svg).textContent = `${d.refname || "ref"} ${fmt(v)}`;
+      }
+    }
+
+    // hover: crosshair + tooltip; the hit target is the whole plot, wider than any mark
+    const cross = el("line", { y1: T, y2: T + ih, class: "cross", visibility: "hidden" }, svg);
+    const hit = el("rect", { x: L, y: T, width: iw, height: ih, fill: "transparent" }, svg);
+    const tip = document.createElement("div"); tip.className = "fc-tip";
+    hit.addEventListener("mousemove", ev => {
+      const box = svg.getBoundingClientRect(), px = ((ev.clientX - box.left) / box.width) * W;
+      const i = Math.max(0, Math.min(xs.length - 1, Math.round(((px - L) / iw) * (xs.length - 1))));
+      cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("visibility", "visible");
+      tip.innerHTML = `<div>${span > 2 * 86400 ? day(xs[i]) + " " : ""}${hour(xs[i])}</div>` + series.map(s =>
+        `<div><i style="display:inline-block;width:8px;height:8px;background:${s.color};margin-right:6px"></i>${s.name} <b>${fmt(s.vals[i])}${d.unit || ""}</b></div>`).join("")
+        + (ref ? `<div>${d.refname} <b>${fmt(ref[i])}</b></div>` : "");
+      tip.style.display = "block";
+      const fb = fig.getBoundingClientRect();
+      const left = ev.clientX - fb.left + 14;
+      tip.style.left = `${Math.min(left, fb.width - tip.offsetWidth - 8)}px`;
+      tip.style.top = `${ev.clientY - fb.top + 12}px`;
+    });
+    hit.addEventListener("mouseleave", () => { tip.style.display = "none"; cross.setAttribute("visibility", "hidden"); });
+    return [svg, tip];
+  }
+
+  function legend(series) {
+    const lg = document.createElement("div"); lg.className = "fc-legend";
+    if (series.length < 2) return lg;      // one series: the title names it
+    lg.innerHTML = series.map(s => `<span><i style="background:${s.color}"></i>${s.name}</span>`).join("");
+    return lg;
+  }
+
+  function table(xs, series, d) {
+    const tb = document.createElement("table"); tb.hidden = true;
+    const rows = xs.slice(-8);
+    tb.innerHTML = `<thead><tr><th>${(dur(d.range) > 2 * 86400) ? "day" : "time"}</th>${series.map(s => `<th>${s.name}</th>`).join("")}</tr></thead><tbody>`
+      + rows.map((t, k) => { const i = xs.length - rows.length + k;
+          return `<tr><td>${day(t)} ${hour(t)}</td>${series.map(s => `<td>${fmt(s.vals[i])}</td>`).join("")}</tr>`; }).join("")
+      + "</tbody>";
+    return tb;
+  }
+
+  async function chart(fig) {
+    const d = fig.dataset;
+    const head = document.createElement("div"); head.className = "fc-head";
+    head.innerHTML = `<span class="fc-title">${d.title}</span><span class="fc-now"></span>`;
+    fig.appendChild(head);
+    const step = dur(d.step), end = Math.floor(Date.now() / 1000 / step) * step, start = end - dur(d.range);
+    const xs = []; for (let t = start; t <= end; t += step) xs.push(t);
+    try {
+      const params = { query: d.q, start, end, step };
+      const [res, refRes] = await Promise.all([vm(d.vm, "/api/v1/query_range", params),
+        d.ref ? vm(d.vm, "/api/v1/query_range", { ...params, query: d.ref }) : Promise.resolve(null)]);
+      const series = shape(res, d, xs);
+      if (!series.length) throw new Error("no data in range");
+      let ref = null;
+      if (refRes && refRes.length) {
+        const m = new Map(refRes[0].values.map(([t, v]) => [Math.round(t), parseFloat(v)]));
+        ref = xs.map(t => (m.has(t) ? m.get(t) : null));
+      }
+      const [svg, tip] = draw(fig, d, xs, series, ref);
+      const last = series.reduce((a, s) => { const v = s.vals.filter(v => v != null).pop(); return a + (v || 0); }, 0);
+      head.querySelector(".fc-now").textContent = d.kind === "bars" ? "" : fmt(last) + (d.unit || "");
+      const tb = table(xs, series, d);
+      const btn = document.createElement("button"); btn.textContent = "table"; btn.type = "button";
+      btn.onclick = () => { tb.hidden = !tb.hidden; btn.textContent = tb.hidden ? "table" : "chart"; svg.style.display = tb.hidden ? "" : "none"; };
+      head.appendChild(btn);
+      fig.append(svg, legend(series), tb, tip);
+    } catch (e) {
+      const off = document.createElement("div"); off.className = "fc-offline";
+      off.textContent = `TELEMETRY · ${e.message === "no data in range" ? "no data in range" : "metrics endpoint unreachable from this browser"}`;
+      fig.appendChild(off);
+    }
+    if (d.panel) {
+      const a = document.createElement("a"); a.href = d.panel; a.target = "_blank"; a.rel = "noopener";
+      a.textContent = "panel ↗"; a.title = "Open the dashboard panel this chart mirrors"; head.appendChild(a);
+    }
+  }
+
+  // ---- sitrep ----------------------------------------------------------------------------
+  const RANK = { ok: 0, info: 0, warn: 1, act: 2 };
+  function judge(rule, v) {
+    if (rule === "info") return "info";
+    for (const part of rule.split(",")) {
+      const [k, n] = part.split(":"); const t = parseFloat(n);
+      if (k === "ok_if_ge") return v >= t ? "ok" : "warn";
+      if (k === "ok_if_le") return v <= t ? "ok" : "warn";
+      if (k === "warn_if_lt") return v < t ? "warn" : "ok";
+      if (k === "act_if_ge" && v >= t) return "act";
+      if (k === "warn_if_ge" && v >= t) return "warn";
+    }
+    return "ok";
+  }
+  async function briefing(sec) {
+    const base = sec.dataset.vm, clock = sec.querySelector(".brief-clock");
+    const tick = () => { clock.textContent = new Date().toISOString().slice(0, 16).replace("T", " ") + "Z"; };
+    tick(); setInterval(tick, 30000);
+    const verdict = sec.querySelector(".brief-verdict");
+    let worst = 0, flagged = 0, reached = 0;
+    await Promise.all([...sec.querySelectorAll(".brief-row")].map(async li => {
+      const d = li.dataset, val = li.querySelector(".brief-value"), st = li.querySelector(".brief-state");
+      try {
+        const [r, of] = await Promise.all([vm(base, "/api/v1/query", { query: d.q }),
+          d.of ? vm(base, "/api/v1/query", { query: d.of }) : Promise.resolve(null)]);
+        reached++;
+        const v = r.length ? parseFloat(r[0].value[1]) : 0;
+        const o = of && of.length ? parseFloat(of[0].value[1]) : null;
+        val.textContent = fmt(v) + (d.unit || "") + (o != null ? ` / ${fmt(o)}` : "");
+        const s = judge(d.rule, v);
+        st.textContent = `[${s === "info" ? " INFO " : s.toUpperCase().padStart(3)}]`; st.className = `brief-state ${s}`;
+        worst = Math.max(worst, RANK[s]); flagged += RANK[s] > 0;
+        if (d.names && v > 0) {
+          const names = await vm(base, "/api/v1/query", { query: d.names });
+          sec.querySelector(".brief-alerts").textContent = "firing: " + names.map(n => n.metric.alertname).sort().join(" · ");
+        }
+      } catch (e) { val.textContent = "UNREAD"; st.textContent = "[ —— ]"; }
+    }));
+    if (!base) { verdict.textContent = "NO METRICS URL · set metrics.url in wiki.json"; verdict.className = "brief-verdict warn"; return; }
+    if (!reached) { verdict.textContent = "NO LINK · metrics endpoint unreachable"; verdict.className = "brief-verdict warn"; return; }
+    verdict.textContent = worst === 0 ? "ALL SECTORS NOMINAL" : `${flagged} SECTOR${flagged > 1 ? "S" : ""} NEED ATTENTION`;
+    verdict.className = `brief-verdict ${["ok", "warn", "act"][worst]}`;
+  }
+
+  const io = new IntersectionObserver(entries => entries.forEach(e => {
+    if (e.isIntersecting) { io.unobserve(e.target); chart(e.target); }
+  }), { rootMargin: "200px" });
+  document.querySelectorAll("figure.fc").forEach(f => io.observe(f));
+  document.querySelectorAll("section.briefing").forEach(briefing);
+})();
+</script>

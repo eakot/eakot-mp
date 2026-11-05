@@ -1,0 +1,37 @@
+{
+  "title": "HELIX // ship systems",
+  "subtitle": "How the ship keeps its crew alive, and who decides what",
+  "root": ".",
+  "source_url": "https://github.com/OWNER/REPO/blob/main/examples/",
+  "plate": "hero",
+  "colophon": "Built from `docs/` by `wiki.py`. The charts query the metrics endpoint from your browser.",
+  "metrics": { "url": "http://localhost:9090", "name": "Prometheus" },
+  "chapters": [
+    {
+      "key": "systems",
+      "file": "docs/ship-systems.md",
+      "nav": "Ship systems",
+      "plate": "systems",
+      "blurb": "The three loops that keep air, power and heat inside their bands.",
+      "sections": {
+        "life-support": { "plate": "air", "charts": ["targets"] },
+        "power": { "plate": "power", "charts": ["memory"] },
+        "where-it-stands": {}
+      }
+    }
+  ],
+  "ledger": { "dir": "docs/adr", "index": "docs/adr/README.md", "title": "Decision ledger", "plate": "decisions" },
+  "charts": {
+    "targets": { "title": "Scrape targets up, by job", "kind": "line", "range": "1d", "step": "15m", "label": "job",
+                 "q": "sum by (job)(up)" },
+    "memory": { "title": "Resident memory, by job", "kind": "stack", "range": "1d", "step": "15m", "label": "job",
+                "q": "sum by (job)(process_resident_memory_bytes) / 2^20", "unit": " MiB" }
+  },
+  "briefing": [
+    { "label": "Targets up", "q": "sum(up)", "of": "count(up)", "rule": "ok_if_ge:1" },
+    { "label": "Targets down", "q": "count(up == 0) or vector(0)", "rule": "ok_if_le:0" },
+    { "label": "Alerts firing", "q": "count(ALERTS{alertstate=\"firing\"}) or vector(0)", "rule": "ok_if_le:0",
+      "names": "count by (alertname)(ALERTS{alertstate=\"firing\"})" }
+  ],
+  "home_charts": ["targets"]
+}

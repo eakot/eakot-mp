@@ -1,0 +1,198 @@
+/* scifi-wiki components. Fonts are vendored OFL files, see fonts/OFL-*.txt. */
+@font-face { font-family: "Orbitron"; font-weight: 500; font-display: swap; src: url(fonts/orbitron-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: "Orbitron"; font-weight: 700; font-display: swap; src: url(fonts/orbitron-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "Orbitron"; font-weight: 900; font-display: swap; src: url(fonts/orbitron-latin-900-normal.woff2) format("woff2"); }
+@font-face { font-family: "Exo 2"; font-weight: 400; font-display: swap; src: url(fonts/exo-2-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Exo 2"; font-weight: 400; font-style: italic; font-display: swap; src: url(fonts/exo-2-latin-400-italic.woff2) format("woff2"); }
+@font-face { font-family: "Exo 2"; font-weight: 600; font-display: swap; src: url(fonts/exo-2-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Exo 2"; font-weight: 400; font-display: swap; unicode-range: U+0400-045F; src: url(fonts/exo-2-cyrillic-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Exo 2"; font-weight: 600; font-display: swap; unicode-range: U+0400-045F; src: url(fonts/exo-2-cyrillic-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Share Tech Mono"; font-weight: 400; font-display: swap; src: url(fonts/share-tech-mono-latin-400-normal.woff2) format("woff2"); }
+
+:root {
+  --void: #070b14; --deck: #0b1220; --panel: #0f1a2b; --line: #1d3150;
+  --ink: #d8e6f5; --dim: #8aa0ba; --glow: #5fd4ff;
+  --s1: #1aa3d1; --s2: #c47f12; --s3: #d55aa8; --s4: #4fa82e; --s-other: #5c6f87;
+  --ok: #4fa82e; --warn: #e0a326; --act: #ff5a5a;
+  --mono: "Share Tech Mono", ui-monospace, monospace;
+  --display: "Orbitron", "Exo 2", sans-serif;
+  --cut: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+}
+
+/* ---- the void: star dust + a faint deck grid ---------------------------------- */
+body {
+  background:
+    radial-gradient(1px 1px at 12% 18%, #ffffff55 50%, transparent 51%),
+    radial-gradient(1px 1px at 72% 8%, #ffffff40 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 88% 42%, #5fd4ff50 50%, transparent 51%),
+    radial-gradient(1px 1px at 33% 66%, #ffffff30 50%, transparent 51%),
+    radial-gradient(1px 1px at 55% 90%, #ffffff35 50%, transparent 51%),
+    radial-gradient(ellipse 80% 50% at 50% -10%, #0e2a4a 0%, transparent 70%),
+    linear-gradient(#1d315018 1px, transparent 1px) 0 0 / 48px 48px,
+    linear-gradient(90deg, #1d315018 1px, transparent 1px) 0 0 / 48px 48px,
+    var(--void);
+  background-attachment: fixed;
+}
+body::after { /* scanlines, barely there */
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background: repeating-linear-gradient(0deg, transparent 0 2px, #00000014 2px 3px);
+}
+
+/* ---- type ---------------------------------------------------------------------- */
+h1, h2, h3, .title, .navbar-brand, .sidebar-title {
+  font-family: var(--display); letter-spacing: .08em; text-transform: uppercase;
+}
+h1.title { font-weight: 900; font-size: clamp(1.8rem, 4vw, 3rem); color: #fff;
+  text-shadow: 0 0 18px #1aa3d1aa, 0 0 2px #5fd4ff; }
+.subtitle { font-family: var(--mono); color: var(--glow); letter-spacing: .12em; text-transform: uppercase; font-size: .95rem; }
+h2 { color: var(--glow); font-size: 1.35rem; margin-top: 2.6rem; padding-bottom: .4rem;
+  border-bottom: 1px solid var(--line); position: relative; }
+h2::before { content: "▸ "; color: var(--s2); }
+h3 { color: #fff; font-size: 1.05rem; margin-top: 1.8rem; }
+p, li { color: var(--ink); }
+strong { color: #fff; font-weight: 600; }
+code { font-family: var(--mono); background: transparent; color: #ffc46b; font-size: .92em; }
+pre, div.sourceCode { background: var(--deck) !important; border: 1px solid var(--line); border-left: 3px solid var(--s2);
+  border-radius: 0; font-family: var(--mono); }
+blockquote { border-left: 3px solid var(--s1); background: #0f1a2b99; padding: .8rem 1.1rem; color: var(--ink); }
+.navbar { border-bottom: 1px solid var(--line); backdrop-filter: blur(6px); background: #070b14e6 !important; }
+.navbar .navbar-brand { font-weight: 900; color: #fff; text-shadow: 0 0 10px #1aa3d1; }
+.navbar .nav-link { font-family: var(--mono); text-transform: uppercase; letter-spacing: .1em; font-size: .85rem; }
+.sidebar-item-text, #TOC a { font-family: var(--mono); font-size: .86rem; letter-spacing: .02em; }
+.sidebar-item-section > .sidebar-item-container .sidebar-item-text { color: var(--s2) !important; text-transform: uppercase; }
+#TOC .toc-title, #toc-title { font-family: var(--display); color: var(--s2); letter-spacing: .14em; text-transform: uppercase; }
+.nav-footer { font-family: var(--mono); font-size: .8rem; border-top: 1px solid var(--line); }
+
+/* ---- tables as HUD readouts ------------------------------------------------------ */
+table { font-size: .92rem; border: 1px solid var(--line); }
+thead th { font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--s2) !important;
+  background: var(--deck) !important; border-bottom: 1px solid var(--s1) !important; }
+tbody tr:hover { background: #1aa3d114; }
+td, th { border-color: var(--line) !important; }
+
+/* ---- plates (mood art, no facts; .plate-void when none is rendered) ----------------------------------------------- */
+.plate { position: relative; margin: 0 0 1.8rem; border: 1px solid var(--line); clip-path: var(--cut); overflow: hidden; }
+.plate img { display: block; width: 100%; aspect-ratio: 1664 / 640; object-fit: cover; filter: saturate(1.1) contrast(1.05); }
+.plate::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, transparent 55%, #070b14 100%), linear-gradient(90deg, #070b1466, transparent 30%, transparent 70%, #070b1466); }
+.plate::before { content: "◤ PLATE"; position: absolute; z-index: 2; left: 14px; bottom: 10px;
+  font: .7rem var(--mono); letter-spacing: .18em; color: #8aa0bacc; }
+.plate-hero img { aspect-ratio: 1664 / 760; }
+figure.plate figcaption { display: none; }
+
+/* ---- cards ------------------------------------------------------------------------- */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem; margin: 1.5rem 0 2rem; }
+.cards-wide { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.card { position: relative; display: flex; flex-direction: column; text-decoration: none !important; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); clip-path: var(--cut); transition: transform .2s, border-color .2s, box-shadow .2s; }
+.card:hover { transform: translateY(-3px); border-color: var(--s1); box-shadow: 0 0 24px #1aa3d155; }
+.card img { width: 100%; aspect-ratio: 16 / 7; object-fit: cover; opacity: .85; border-bottom: 1px solid var(--line); }
+.card:hover img { opacity: 1; }
+.card-no { position: absolute; top: 8px; right: 12px; font: 700 1.3rem var(--display); color: #fff; text-shadow: 0 0 10px #000, 0 0 12px #1aa3d1; }
+.card-title { font: 700 .95rem var(--display); letter-spacing: .07em; text-transform: uppercase; color: var(--glow); padding: .8rem 1rem .2rem; }
+.card-text { font-size: .9rem; color: var(--dim); padding: 0 1rem 1rem; }
+
+/* ---- home: briefing + vitals --------------------------------------------------------- */
+.home-grid { display: grid; grid-template-columns: minmax(360px, 1.1fr) 1.7fr; gap: 1.2rem; margin: -5rem 0 1rem; position: relative; z-index: 3; }
+@media (max-width: 900px) { .home-grid { grid-template-columns: 1fr; margin-top: 0; } }
+.home-charts { display: grid; gap: 1rem; }
+.briefing { background: #0b1220ee; border: 1px solid var(--s1); clip-path: var(--cut); padding: 1rem 1.2rem;
+  font-family: var(--mono); box-shadow: inset 0 0 40px #1aa3d122; }
+.brief-head { display: flex; justify-content: space-between; color: var(--s2); letter-spacing: .2em; font-size: .85rem; }
+.brief-title { font-family: var(--display); font-weight: 900; }
+.brief-verdict { font: 700 1.05rem var(--display); letter-spacing: .06em; margin: .6rem 0 .8rem; color: var(--glow); }
+.brief-verdict.ok { color: var(--ok); } .brief-verdict.warn { color: var(--warn); } .brief-verdict.act { color: var(--act); }
+.brief-list { list-style: none; padding: 0; margin: 0; }
+.brief-row { display: flex; align-items: baseline; gap: .4rem; font-size: .92rem; line-height: 1.9; color: var(--ink); }
+.brief-label { white-space: nowrap; }
+.brief-dots { flex: 1; border-bottom: 1px dotted #3a5578; transform: translateY(-4px); }
+.brief-value { color: #fff; }
+.brief-state { min-width: 4.6em; text-align: right; color: var(--dim); }
+.brief-state.ok { color: var(--ok); } .brief-state.warn { color: var(--warn); } .brief-state.act { color: var(--act); }
+.brief-alerts { font-size: .74rem; line-height: 1.5; color: var(--dim); margin: .6rem 0 0; }
+.home-head { margin-top: 2rem; }
+.colophon { font: .82rem var(--mono); color: var(--dim); border-top: 1px dashed var(--line); padding-top: .8rem; margin-top: 2rem; }
+
+/* ---- charts ------------------------------------------------------------------------------ */
+.deck { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 1.1rem; }
+@media (max-width: 560px) { .deck { grid-template-columns: 1fr; } }
+figure.fc { position: relative; margin: 0 0 1.2rem; background: var(--deck); border: 1px solid var(--line); clip-path: var(--cut);
+  padding: .8rem 1rem .6rem; min-height: 230px; }
+figure.fc-compact { margin: 0; min-height: 0; }
+.fc-head { display: flex; align-items: baseline; gap: .6rem; font-family: var(--mono); }
+.fc-title { flex: 1; color: var(--glow); text-transform: uppercase; letter-spacing: .08em; font-size: .82rem; }
+.fc-now { color: #fff; font-size: 1.15rem; }
+.fc-head a, .fc-head button { color: var(--dim); font: .78rem var(--mono); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: none; }
+.fc-head a:hover, .fc-head button:hover { color: var(--glow); }
+.fc svg { display: block; width: 100%; height: auto; overflow: visible; }
+.fc .axis text { fill: var(--dim); font: 10px var(--mono); }
+.fc .grid line { stroke: #1d315088; }
+.fc .ref { stroke: var(--act); stroke-dasharray: 5 4; stroke-width: 1.5; }
+.fc .ref-label { fill: var(--act); font: 10px var(--mono); }
+.fc .dlabel { font: 10.5px var(--mono); fill: var(--ink); }
+.fc .cross { stroke: #8aa0ba88; }
+.fc-legend { display: flex; flex-wrap: wrap; gap: .3rem 1rem; font: .76rem var(--mono); color: var(--ink); margin-top: .3rem; }
+.fc-legend i { display: inline-block; width: 10px; height: 10px; margin-right: .35rem; border-radius: 2px; vertical-align: -1px; }
+.fc-tip { position: absolute; pointer-events: none; background: #070b14f2; border: 1px solid var(--s1); padding: .4rem .6rem;
+  font: .76rem var(--mono); color: var(--ink); white-space: nowrap; z-index: 5; display: none; }
+.fc-tip b { color: #fff; font-weight: 400; }
+.fc-offline { display: grid; place-items: center; min-height: 150px; font: .85rem var(--mono); color: var(--dim);
+  text-align: center; letter-spacing: .08em; }
+.fc-offline::before { content: "◌ "; color: var(--warn); }
+.fc table { font: .78rem var(--mono); margin-top: .5rem; width: 100%; }
+.telemetry-head { margin-top: 3rem; }
+
+/* ---- decision ledger ---------------------------------------------------------------------- */
+.ledger-count { font: .9rem var(--mono); }
+.ledger-count span { margin-right: .6rem; }
+.adr { display: flex; align-items: baseline; flex-wrap: wrap; gap: .3rem .8rem; margin-top: 1.4rem; padding-top: .8rem;
+  border-top: 1px solid var(--line); scroll-margin-top: 80px; }
+.adr:target { border-top-color: var(--s2); }
+.adr-no { font: 900 1.5rem var(--display); color: #fff; text-shadow: 0 0 12px #1aa3d1; }
+.adr-title { font: 700 1rem var(--display); letter-spacing: .04em; text-transform: uppercase; flex: 1 1 60%; }
+.adr-date { font: .8rem var(--mono); color: var(--dim); }
+[class^="badge-"], .adr-status { font: .72rem var(--mono); letter-spacing: .14em; text-transform: uppercase; padding: .1rem .5rem; border: 1px solid; }
+.badge-accepted { color: var(--ok); border-color: var(--ok); }
+.badge-proposed { color: var(--warn); border-color: var(--warn); }
+.badge-superseded, .badge-unknown, .badge-rejected { color: var(--dim); border-color: var(--dim); }
+.adr-summary { color: var(--dim); font-size: .93rem; margin: .4rem 0 0 0; }
+.adr-summary p { color: var(--dim); }
+
+/* ---- mermaid in the HUD -------------------------------------------------------------------- */
+.cell-output-display, div.mermaid, pre.mermaid { background: transparent; }
+.quarto-figure, figure.quarto-float { background: #0b1220aa; border: 1px solid var(--line); padding: 1rem; clip-path: var(--cut); }
+svg[id^="mermaid"] .node rect, svg[id^="mermaid"] .node polygon, svg[id^="mermaid"] .node circle,
+svg[id^="mermaid"] .node path { stroke: #1aa3d1 !important; stroke-width: 1.4px !important; filter: drop-shadow(0 0 4px #1aa3d166); }
+svg[id^="mermaid"] .cluster rect { fill: #0f1a2b66 !important; stroke: #c47f12 !important; stroke-dasharray: 4 3; }
+svg[id^="mermaid"] .cluster-label, svg[id^="mermaid"] .cluster text { fill: #c47f12 !important; color: #c47f12 !important; }
+svg[id^="mermaid"] .edgeLabel, svg[id^="mermaid"] .edgeLabel rect, svg[id^="mermaid"] .labelBkg { background: #0b1220 !important; fill: #0b1220 !important; color: #8fdcff !important; }
+svg[id^="mermaid"] .flowchart-link { stroke: #1aa3d1 !important; }
+svg[id^="mermaid"] .stateGroup rect, svg[id^="mermaid"] rect.basic { stroke: #1aa3d1 !important; }
+svg[id^="mermaid"] .node rect, svg[id^="mermaid"] .node polygon, svg[id^="mermaid"] .node circle,
+svg[id^="mermaid"] .node path, svg[id^="mermaid"] .stateGroup rect, svg[id^="mermaid"] rect.basic,
+svg[id^="mermaid"] .state-node rect, svg[id^="mermaid"] g.node > rect { fill: #0f1a2b !important; }
+svg[id^="mermaid"] .nodeLabel, svg[id^="mermaid"] .label, svg[id^="mermaid"] .label text, svg[id^="mermaid"] span,
+svg[id^="mermaid"] .stateLabel text, svg[id^="mermaid"] text.state-title, svg[id^="mermaid"] .state-description { color: #d8e6f5 !important; fill: #d8e6f5 !important; }
+svg[id^="mermaid"] .edgeLabel span, svg[id^="mermaid"] .edgeLabel p, svg[id^="mermaid"] .transition + text,
+svg[id^="mermaid"] .edgeLabel text { color: #8fdcff !important; fill: #8fdcff !important; background: #0b1220 !important; }
+svg[id^="mermaid"] .start-state, svg[id^="mermaid"] circle.state-start { fill: #5fd4ff !important; }
+svg[id^="mermaid"] .end-state-inner { fill: #5fd4ff !important; }
+svg[id^="mermaid"] .transition, svg[id^="mermaid"] .edgePath path, svg[id^="mermaid"] path.relation { stroke: #1aa3d1 !important; }
+svg[id^="mermaid"] marker path, svg[id^="mermaid"] .arrowheadPath { fill: #1aa3d1 !important; stroke: #1aa3d1 !important; }
+svg[id^="mermaid"] { max-height: 62vh; width: auto !important; max-width: 100% !important; margin: 0 auto; display: block; }
+
+
+/* ---- the void: what a plate or card shows before art/<name>.webp exists --------------------- */
+.plate-void { aspect-ratio: 1664 / 640; background:
+    radial-gradient(1px 1px at 20% 30%, #ffffff66 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 64% 22%, #5fd4ff88 50%, transparent 51%),
+    radial-gradient(1px 1px at 82% 70%, #ffffff44 50%, transparent 51%),
+    radial-gradient(ellipse 60% 90% at 70% 120%, #1aa3d133 0%, transparent 60%),
+    radial-gradient(circle at 30% 160%, transparent 54%, #c47f1255 55%, transparent 56%),
+    repeating-linear-gradient(90deg, #1d315033 0 1px, transparent 1px 64px),
+    var(--deck); }
+.plate-hero.plate-void { aspect-ratio: 1664 / 520; }
+.plate-void::before { content: "◤ NO PLATE"; }
+.card-void { display: block; width: 100%; aspect-ratio: 16 / 7; border-bottom: 1px solid var(--line); background:
+    radial-gradient(circle at 75% 140%, transparent 50%, #1aa3d155 51%, transparent 53%),
+    repeating-linear-gradient(0deg, #1d315044 0 1px, transparent 1px 24px), var(--deck); }

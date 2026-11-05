@@ -6,11 +6,13 @@ worth sharing. Every plugin here works in any repository and names none.
 ```
 /plugin marketplace add eakot/eakot-mp
 /plugin install grafana-sitrep@eakot-mp
+/plugin install scifi-wiki@eakot-mp
 ```
 
 | Plugin | What it does |
 |---|---|
 | [`grafana-sitrep`](plugins/grafana-sitrep/skills/sitrep-dashboard/SKILL.md) | Refactors a Grafana dashboard into "sitrep" status sheets: a monospace mission briefing whose first line is the verdict and the move, then a table of contents of every number (`label ..... value [OK/WARN/ACT]`), every repo, PR, issue, commit and workflow a link, beside history charts that cannot draw an impossible peak. The agent works in the operator's role: it asks the questions a reader asks of each panel and answers them from live data, and brings the human only the rulings (thresholds, what "today" means, what idle is intended). Needs Grafana 11.3 and the Business Text panel: see [requirements](#grafana-sitrep-requirements). |
+| [`scifi-wiki`](plugins/scifi-wiki/skills/scifi-wiki/SKILL.md) | Refactors a set of markdown documents into a sci-fi wiki: one static Quarto site with a page per `##` section, chapter cards built from each section's first sentence, a ledger of the decision records the chapters cite, and optional live PromQL charts and a SITREP briefing that run in the reader's browser. The markdown stays the truth: `wiki.py lint` checks it against the wiki grammar, and the site is rebuilt from it, never edited. Needs Python 3.9 and Quarto 1.4: see [requirements](#scifi-wiki-requirements). |
 
 ### `grafana-sitrep` requirements
 
@@ -67,3 +69,21 @@ sense in one repository belongs in that repository's `.claude/`, not here.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## `scifi-wiki`
+
+![A scifi-wiki chapter index: the chapter's intro, then one card per section with its first sentence](docs/scifi-wiki-chapter.png)
+
+A chapter index from the bundled example (`examples/`). It has no plates yet, so each picture slot shows the
+starfield void.
+
+### `scifi-wiki` requirements
+
+| Component | Version | Needed for |
+|---|---|---|
+| Python | **3.9** or later, standard library only | `scripts/wiki.py` (init, scaffold, lint, stage, check) |
+| [Quarto](https://quarto.org) | **1.4** or later (tested on 1.9) | `wiki.py build`, which renders the staged pages to `_site/` |
+| A Prometheus-compatible API that sends `Access-Control-Allow-Origin` | any | only the live charts and the briefing. VictoriaMetrics sends it by default; Prometheus needs a proxy |
+| [ComfyUI](https://github.com/comfyanonymous/ComfyUI) + Pillow | any current release, optional | only `scripts/plates.py`, which paints the mood plates. Without them the pages show a void pattern |
+
+The fonts (Orbitron, Exo 2 and Share Tech Mono, all SIL OFL) are vendored, so a page makes no third-party request.

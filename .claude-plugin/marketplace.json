@@ -11,6 +11,11 @@
       "name": "grafana-sitrep",
       "source": "./plugins/grafana-sitrep",
       "description": "Refactor a Grafana dashboard into dense sitrep status sheets: a one-line verdict, every number with an OK/WARN/ACT tag, every git entity a link."
+    },
+    {
+      "name": "scifi-wiki",
+      "source": "./plugins/scifi-wiki",
+      "description": "Refactor markdown documents into a sci-fi wiki: one static Quarto site, a page per section, cards, a decision ledger, live PromQL charts and a SITREP briefing, derived from the sources."
     }
   ]
 }
